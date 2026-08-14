@@ -14,7 +14,7 @@
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--paper)}
-.topbar{background:var(--ink);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.topbar{background:var(--ink);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
 .brand{font-weight:700;letter-spacing:.06em;font-size:15px}
 .brand small{display:block;font-weight:400;font-size:11px;color:#9fb0be;letter-spacing:.12em}
 .tabs{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
@@ -285,7 +285,7 @@ async function saveToCloud(showToast){
     if(showToast)toast("Save failed: "+e.message);
   }
   renderSyncBadge();
-  if(S.tab==="settings"&&!isTyping())render();
+  if(!isTyping())render();
 }
 /* "Restore from backup" — the ONLY thing that ever pulls from the Sheet, and
    only when you deliberately click it (with confirmation, since it replaces
@@ -891,6 +891,10 @@ function rUpload(){
   <p class="note">To open, print, or manage a month you've already uploaded, use the <b>Payslips</b> tab (pick the month there) or the <b>History</b> tab. Backup and cloud sync are under <b>Settings</b>.</p>`;
 }
 
+function cloudSaveButtonHTML(){
+  if(!getEndpoint())return"";
+  return `<button class="btn ghost small" data-act="cloud-save">☁ Save to cloud${dirtyKeys.size?" ("+dirtyKeys.size+")":""}</button>`;
+}
 function rEmployees(){
   const cur=S.settings.currency;
   const codes=Object.keys(S.employees).sort((a,b)=>{
@@ -934,6 +938,7 @@ function rEmployees(){
   <div class="row" style="margin-bottom:14px">
     <input class="txt sans" style="width:260px" placeholder="Search code or name…" id="empSearch" value="${esc(S._q||"")}">
     <span class="note"><span class="pill hourly">Day rate</span> ${nDaily} &nbsp; <span class="pill monthly">Monthly</span> ${nM}${nInactive?` &nbsp; <span class="note">${nInactive} inactive</span>`:""}</span>
+    ${cloudSaveButtonHTML()}
   </div>
   <div class="row" style="margin-bottom:14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 14px">
     <span style="font-size:13px;font-weight:600">Set OT rate for everyone:</span>
@@ -1076,6 +1081,7 @@ function rPayslips(){
       <select class="txt sans" data-act="pick-emp" style="min-width:240px">${empOpts}</select>
       <button class="btn ghost" data-act="preview">Preview ${S.selEmp==="ALL"?"all":""}</button>
       <button class="btn" data-act="print">Print ${S.selEmp==="ALL"?"all payslips":"payslip"}</button>
+      ${cloudSaveButtonHTML()}
     </div>
     <p class="note" style="margin-top:8px">Preview opens the same layout in a new tab without saving anything to history. Print does the same but also archives it permanently — that's the point it commits. Enter times as a comma-separated list in edit mode — they pair up automatically (1st–2nd, 3rd–4th…).</p>
   </div>`+show.map(c=>slipHTML(mk,c,!!S.editCodes[c])).join("");
