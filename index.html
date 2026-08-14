@@ -259,6 +259,10 @@ function formPostRequest(url,data,ms){
   });
 }
 const retryTimers={};
+function isTyping(){
+  const el=document.activeElement;
+  return !!(el&&["INPUT","TEXTAREA","SELECT"].includes(el.tagName));
+}
 function cloudPush(key,valueStr,attempt){
   attempt=attempt||0;
   const url=getEndpoint(); if(!url)return;
@@ -272,9 +276,11 @@ function cloudPush(key,valueStr,attempt){
       const current=LS_OK?localStorage.getItem("tc-"+key):MEM[key];
       if(current===valueStr)dirtyKeys.delete(key);
       CLOUD.status="on"; CLOUD.lastSync=new Date(); renderSyncBadge();
+      if(S.tab==="settings"&&!isTyping())render();
     })
     .catch(e=>{
       CLOUD.status="error"; CLOUD.lastError=e.message; renderSyncBadge();
+      if(S.tab==="settings"&&!isTyping())render();
       const delay=Math.min(30000,2000*Math.pow(2,attempt)); // 2s,4s,8s,16s,30s cap
       clearTimeout(retryTimers[key]);
       retryTimers[key]=setTimeout(()=>{
@@ -1651,9 +1657,7 @@ function startSyncPolling(){
   if(syncPollHandle)clearInterval(syncPollHandle);
   syncPollHandle=setInterval(()=>{
     if(!getEndpoint())return;
-    const el=document.activeElement;
-    const busy=el&&["INPUT","TEXTAREA","SELECT"].includes(el.tagName);
-    if(busy)return;
+    if(isTyping())return;
     if(pendingPushes>0)return;                    // a save is still in flight — don't risk overwriting it
     if(Date.now()-lastPushSettledAt<10000)return;  // give a just-finished save a moment to fully land
     pullFromCloud(false);
