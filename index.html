@@ -269,6 +269,7 @@ function cloudPush(key,valueStr,attempt){
   dirtyKeys.add(key);
   CLOUD.status="syncing"; renderSyncBadge();
   pendingPushes++;
+  console.log("[SYNC] pushing '"+key+"' (attempt "+(attempt+1)+")");
   formPostRequest(url,{key,value:valueStr})
     .then(d=>{
       if(d&&d.error)throw new Error(d.error);
@@ -277,10 +278,12 @@ function cloudPush(key,valueStr,attempt){
       if(current===valueStr)dirtyKeys.delete(key);
       CLOUD.status="on"; CLOUD.lastSync=new Date(); renderSyncBadge();
       if(S.tab==="settings"&&!isTyping())render();
+      console.log("[SYNC] push OK: '"+key+"'");
     })
     .catch(e=>{
       CLOUD.status="error"; CLOUD.lastError=e.message; renderSyncBadge();
       if(S.tab==="settings"&&!isTyping())render();
+      console.log("[SYNC] push FAILED: '"+key+"' — "+e.message);
       const delay=Math.min(30000,2000*Math.pow(2,attempt)); // 2s,4s,8s,16s,30s cap
       clearTimeout(retryTimers[key]);
       retryTimers[key]=setTimeout(()=>{
@@ -293,9 +296,11 @@ function cloudPush(key,valueStr,attempt){
 async function pullFromCloud(showToast){
   const url=getEndpoint(); if(!url)return;
   CLOUD.status="syncing"; renderSyncBadge();
+  console.log("[SYNC] pulling from cloud...");
   try{
     const data=await jsonpRequest(url,{action:"getAll"});
     if(data&&data.error)throw new Error(data.error);
+    console.log("[SYNC] pull OK, keys received:",Object.keys(data||{}));
     for(const[k,vs]of Object.entries(data||{})){
       if(dirtyKeys.has(k))continue; // protect a not-yet-confirmed local change from being reverted
       try{if(LS_OK)localStorage.setItem("tc-"+k,vs); else MEM[k]=vs;}catch(e){}
@@ -315,6 +320,7 @@ async function pullFromCloud(showToast){
     render();
   }catch(e){
     CLOUD.status="error"; CLOUD.lastError=e.message;
+    console.log("[SYNC] pull FAILED:",e.message);
     if(showToast)toast("Cloud sync failed: "+e.message);
     renderSyncBadge();
     if(S.tab==="settings")render(); // keep the visible status text in sync with the badge, not just the badge itself
