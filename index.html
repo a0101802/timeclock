@@ -53,7 +53,8 @@ input.num{width:85px}
 .banner{background:var(--amber-soft);color:var(--amber);padding:10px 24px;font-size:13px;display:none;font-weight:600}
 .syncbadge{font-size:11px;padding:5px 11px;border-radius:99px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
 .syncbadge.off{background:#33465a;color:#c7d2dc}
-.syncbadge.syncing{background:var(--amber-soft);color:var(--amber)}
+.syncbadge.saving{background:var(--amber-soft);color:var(--amber)}
+.syncbadge.unsaved{background:var(--amber-soft);color:var(--amber)}
 .syncbadge.on{background:var(--accent-soft);color:var(--accent)}
 .syncbadge.error{background:#fbe4e1;color:var(--red)}
 /* payslip */
@@ -131,6 +132,7 @@ function money(v,cur){return cur+Number(v||0).toLocaleString("en-SG",{minimumFra
 function t2s(t){ // "HH:MM", "HH:MM:SS", or "H:MM AM/PM" -> seconds
   if(t==null)return null;
   const s=String(t).trim();
+  if(s==="")return null; // Number("") is 0 in JS, not NaN — guard explicitly so a blank field isn't read as 00:00
   const ampm=s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
   if(ampm){
     let h=+ampm[1]%12; if(/pm/i.test(ampm[4]))h+=12;
@@ -169,40 +171,42 @@ const sSet=(k,v)=>{
   try{
     const s=JSON.stringify(v);
     if(LS_OK)localStorage.setItem("tc-"+k,s); else MEM[k]=s;
-    cloudPush(k,s);
+    dirtyKeys.add(k); // tracked purely so you can see "N unsaved changes" — nothing is pushed automatically
+    renderSyncBadge();
   }catch(e){toast("Warning: could not save ("+e.message+")");}
 };
 
-/* ---------- cloud sync (Google Sheet via Apps Script web app) ----------
-   The endpoint URL itself is stored locally (each device configures it once).
-   All other app data continues to write to localStorage instantly (so the UI
-   never waits on the network); every write is also pushed to the shared
-   Google Sheet in the background, and a full pull merges in whatever the
-   other device last saved. */
-const CLOUD={status:"off",lastSync:null,lastError:null}; // status: off|syncing|on|error
+/* ---------- cloud backup (Google Sheet via Apps Script web app) ----------
+   Single-user model: local storage is always the live copy and saves
+   instantly with zero network involvement. The Sheet is purely a manual,
+   on-demand backup you can restore from — nothing syncs automatically in
+   the background, so there's no continuous process that can collide with
+   whatever you're actively doing. */
+const CLOUD={status:"off",lastSync:null,lastError:null}; // status: off|saving|on|error
+const dirtyKeys=new Set(); // keys changed locally since the last successful "Save to cloud"
 function getEndpoint(){try{return localStorage.getItem("tc-cloud-endpoint")||"";}catch(e){return "";}}
 function setEndpoint(u){try{if(u)localStorage.setItem("tc-cloud-endpoint",u);else localStorage.removeItem("tc-cloud-endpoint");}catch(e){}}
 function renderSyncBadge(){
   const b=$("#syncBadge"); if(!b)return;
   const t=CLOUD.status==="off"?"☁ Not connected":
-    CLOUD.status==="syncing"?"☁ Syncing…":
-    CLOUD.status==="error"?"☁ Sync error":
-    "☁ Synced"+(CLOUD.lastSync?" "+CLOUD.lastSync.toTimeString().slice(0,5):"");
+    CLOUD.status==="saving"?"☁ Saving…":
+    CLOUD.status==="error"?"☁ Save failed":
+    dirtyKeys.size?"☁ "+dirtyKeys.size+" unsaved":
+    "☁ Saved"+(CLOUD.lastSync?" "+CLOUD.lastSync.toTimeString().slice(0,5):"");
   b.textContent=t;
-  b.className="syncbadge "+CLOUD.status;
+  b.className="syncbadge "+(CLOUD.status==="on"&&dirtyKeys.size?"unsaved":CLOUD.status);
 }
-let pendingPushes=0, lastPushSettledAt=0;
-/* Tracks every key whose local value hasn't been CONFIRMED saved to the Sheet
-   yet. As long as a key is dirty: (a) pullFromCloud will never overwrite it
-   with the (older) cloud value, and (b) it keeps retrying with backoff until
-   it succeeds. This is what stops a failed background save from silently
-   reverting to old data the next time anything syncs. */
-const dirtyKeys=new Set();
+function isTyping(){
+  const el=document.activeElement;
+  return !!(el&&["INPUT","TEXTAREA","SELECT"].includes(el.tagName));
+}
+/* Warn before closing/navigating away if there's anything not yet backed up */
+window.addEventListener("beforeunload",e=>{
+  if(dirtyKeys.size>0){ e.preventDefault(); e.returnValue=""; }
+});
 /* Google Apps Script's web app responses are unreliable specifically for
-   fetch()/XHR — a well-documented platform limitation, confirmed here by GET
-   and POST both failing identically regardless of hosting or auth. Neither
-   of these techniques is a fetch() call, so neither is subject to that CORS
-   restriction at all:
+   fetch()/XHR — a well-documented platform limitation. Neither of these
+   techniques is a fetch() call, so neither is subject to that restriction:
    - Reads: JSONP — a <script> tag loading the response as executable JS.
    - Writes: a hidden <form> POST submitted into a hidden <iframe>, with the
      result sent back via postMessage. Form submissions are plain browser
@@ -258,51 +262,42 @@ function formPostRequest(url,data,ms){
     form.submit();
   });
 }
-const retryTimers={};
-function isTyping(){
-  const el=document.activeElement;
-  return !!(el&&["INPUT","TEXTAREA","SELECT"].includes(el.tagName));
+/* "Save to cloud" — the ONLY thing that ever writes to the Sheet, and only
+   when you click it. Pushes every key currently in local storage; simple
+   and safe to re-run any time since it's just overwriting your own backup
+   with your own current data. */
+async function saveToCloud(showToast){
+  const url=getEndpoint(); if(!url){toast("Connect a Google Sheet first (Settings → Cloud backup).");return;}
+  CLOUD.status="saving"; renderSyncBadge();
+  try{
+    const keys=["settings","employees","months","holidays","rateHistory"];
+    for(const mk of S.months)keys.push("month-"+mk,"bonus-"+mk,"ov-"+mk,"payslips-"+mk,"deduct-"+mk);
+    for(const k of keys){
+      const raw=LS_OK?localStorage.getItem("tc-"+k):MEM[k];
+      if(raw==null)continue;
+      await formPostRequest(url,{key:k,value:raw});
+    }
+    dirtyKeys.clear();
+    CLOUD.status="on"; CLOUD.lastSync=new Date(); CLOUD.lastError=null;
+    if(showToast)toast("Saved to cloud backup.");
+  }catch(e){
+    CLOUD.status="error"; CLOUD.lastError=e.message;
+    if(showToast)toast("Save failed: "+e.message);
+  }
+  renderSyncBadge();
+  if(S.tab==="settings"&&!isTyping())render();
 }
-function cloudPush(key,valueStr,attempt){
-  attempt=attempt||0;
+/* "Restore from backup" — the ONLY thing that ever pulls from the Sheet, and
+   only when you deliberately click it (with confirmation, since it replaces
+   whatever's on this device). Meant for disaster recovery — e.g. local
+   storage got wiped — not for routine use. */
+async function restoreFromCloud(showToast){
   const url=getEndpoint(); if(!url)return;
-  dirtyKeys.add(key);
-  CLOUD.status="syncing"; renderSyncBadge();
-  pendingPushes++;
-  console.log("[SYNC] pushing '"+key+"' (attempt "+(attempt+1)+")");
-  formPostRequest(url,{key,value:valueStr})
-    .then(d=>{
-      if(d&&d.error)throw new Error(d.error);
-      // only clear dirty if this is still the latest value for the key (a newer edit may have superseded this push)
-      const current=LS_OK?localStorage.getItem("tc-"+key):MEM[key];
-      if(current===valueStr)dirtyKeys.delete(key);
-      CLOUD.status="on"; CLOUD.lastSync=new Date(); renderSyncBadge();
-      if(S.tab==="settings"&&!isTyping())render();
-      console.log("[SYNC] push OK: '"+key+"'");
-    })
-    .catch(e=>{
-      CLOUD.status="error"; CLOUD.lastError=e.message; renderSyncBadge();
-      if(S.tab==="settings"&&!isTyping())render();
-      console.log("[SYNC] push FAILED: '"+key+"' — "+e.message);
-      const delay=Math.min(30000,2000*Math.pow(2,attempt)); // 2s,4s,8s,16s,30s cap
-      clearTimeout(retryTimers[key]);
-      retryTimers[key]=setTimeout(()=>{
-        const current=LS_OK?localStorage.getItem("tc-"+key):MEM[key];
-        if(current!=null&&dirtyKeys.has(key))cloudPush(key,current,attempt+1);
-      },delay);
-    })
-    .finally(()=>{ pendingPushes=Math.max(0,pendingPushes-1); lastPushSettledAt=Date.now(); });
-}
-async function pullFromCloud(showToast){
-  const url=getEndpoint(); if(!url)return;
-  CLOUD.status="syncing"; renderSyncBadge();
-  console.log("[SYNC] pulling from cloud...");
+  CLOUD.status="saving"; renderSyncBadge();
   try{
     const data=await jsonpRequest(url,{action:"getAll"});
     if(data&&data.error)throw new Error(data.error);
-    console.log("[SYNC] pull OK, keys received:",Object.keys(data||{}));
     for(const[k,vs]of Object.entries(data||{})){
-      if(dirtyKeys.has(k))continue; // protect a not-yet-confirmed local change from being reverted
       try{if(LS_OK)localStorage.setItem("tc-"+k,vs); else MEM[k]=vs;}catch(e){}
     }
     S.settings=Object.assign({},DEF_SET,sGet("settings",{}));
@@ -310,43 +305,21 @@ async function pullFromCloud(showToast){
     S.months=sGet("months",[]);
     S.holidays=sGet("holidays",[]);
     S.rateHistory=sGet("rateHistory",{});
-    S.monthData={}; S.bonuses={}; S.overrides={}; S.payslips={}; S.deductions={}; // clear lazy caches so loadMonth re-reads merged data
+    S.monthData={}; S.bonuses={}; S.overrides={}; S.payslips={}; S.deductions={}; // clear lazy caches so loadMonth re-reads restored data
     if(S.months.length){
       if(!S.activeMonth||!S.months.includes(S.activeMonth))S.activeMonth=S.months[S.months.length-1];
       loadMonth(S.activeMonth);
     }
+    dirtyKeys.clear();
     CLOUD.status="on"; CLOUD.lastSync=new Date(); CLOUD.lastError=null;
-    if(showToast)toast("Synced with cloud — showing the latest shared data.");
+    if(showToast)toast("Restored from cloud backup.");
     render();
   }catch(e){
     CLOUD.status="error"; CLOUD.lastError=e.message;
-    console.log("[SYNC] pull FAILED:",e.message);
-    if(showToast)toast("Cloud sync failed: "+e.message);
+    if(showToast)toast("Restore failed: "+e.message);
     renderSyncBadge();
-    if(S.tab==="settings")render(); // keep the visible status text in sync with the badge, not just the badge itself
+    if(S.tab==="settings")render();
   }
-}
-async function pushAllToCloud(showToast){
-  const url=getEndpoint(); if(!url)return;
-  CLOUD.status="syncing"; renderSyncBadge();
-  try{
-    const keys=["settings","employees","months","holidays","rateHistory"];
-    for(const mk of S.months)keys.push("month-"+mk,"bonus-"+mk,"ov-"+mk,"payslips-"+mk,"deduct-"+mk);
-    for(const k of keys){
-      const raw=LS_OK?localStorage.getItem("tc-"+k):MEM[k];
-      if(raw==null)continue;
-      dirtyKeys.add(k);
-      await formPostRequest(url,{key:k,value:raw});
-      dirtyKeys.delete(k);
-    }
-    CLOUD.status="on"; CLOUD.lastSync=new Date(); CLOUD.lastError=null;
-    if(showToast)toast("Uploaded everything on this device to the cloud.");
-  }catch(e){
-    CLOUD.status="error"; CLOUD.lastError=e.message;
-    if(showToast)toast("Upload failed: "+e.message);
-  }
-  renderSyncBadge();
-  if(S.tab==="settings")render(); // keep the visible status text in sync with the badge, not just the badge itself
 }
 
 /* ---------- state ---------- */
@@ -1223,9 +1196,10 @@ function rSettings(){
     ${hint?`<div class="note" style="margin-top:3px">${hint}</div>`:""}</div>`;
   const ep=getEndpoint();
   const statusLine=CLOUD.status==="off"?`<span class="note">Not connected — data is only saved in this browser.</span>`:
-    CLOUD.status==="syncing"?`<span class="note">Syncing…</span>`:
-    CLOUD.status==="error"?`<span class="note" style="color:var(--red)">Sync error: ${esc(CLOUD.lastError||"")}</span>`:
-    `<span class="note" style="color:var(--accent)">Connected — last synced ${CLOUD.lastSync?CLOUD.lastSync.toLocaleString():"just now"}.</span>`;
+    CLOUD.status==="saving"?`<span class="note">Saving…</span>`:
+    CLOUD.status==="error"?`<span class="note" style="color:var(--red)">Save failed: ${esc(CLOUD.lastError||"")}</span>`:
+    dirtyKeys.size?`<span class="note" style="color:var(--amber)">${dirtyKeys.size} change(s) not yet saved to the cloud backup.</span>`:
+    `<span class="note" style="color:var(--accent)">Backed up — last saved ${CLOUD.lastSync?CLOUD.lastSync.toLocaleString():"just now"}.</span>`;
   return `<div class="card" style="max-width:600px"><h2>Settings</h2>
   <p class="sub">Applied to every calculation. Saved automatically.</p>
   ${f("Company name (shown on payslips)","company","text")}
@@ -1252,13 +1226,13 @@ function rSettings(){
     ${S.holidays.map((h,idx)=>`<tr><td class="mono">${esc(h.date)}</td><td>${esc(h.label||"")}</td><td><button class="btn ghost small" data-act="hol-del" data-idx="${idx}">Remove</button></td></tr>`).join("")}
   </tbody></table>`:`<p class="note">No public holidays added yet.</p>`}
   </div>
-  <div class="card" style="max-width:600px"><h2>Cloud sync</h2>
-  <p class="sub">Connect this page to a shared Google Sheet so you and your partner always see the same data — nothing lives only in one browser. Each device is connected separately using the same web app URL.</p>
+  <div class="card" style="max-width:600px"><h2>Cloud backup</h2>
+  <p class="sub">A Google Sheet you can save your data to, and restore from if this device's local data is ever lost. Nothing happens automatically — you save when you want to, and restoring is only for recovering a lost local copy.</p>
   <div class="set-field"><label>Web app URL</label>
     <input class="txt sans wide" style="width:100%" id="cloudUrlInput" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(ep)}"></div>
   <div class="row" style="margin-bottom:10px">
-    <button class="btn" data-act="cloud-connect">${ep?"Save & sync":"Connect"}</button>
-    ${ep?`<button class="btn ghost" data-act="cloud-sync">Sync now</button><button class="btn ghost" data-act="cloud-push-all">Upload everything from this device</button><button class="btn ghost" data-act="cloud-disconnect">Disconnect</button>`:""}
+    <button class="btn" data-act="cloud-connect">${ep?"Update URL":"Connect"}</button>
+    ${ep?`<button class="btn" data-act="cloud-save">Save to cloud</button><button class="btn ghost" data-act="cloud-restore">Restore from backup</button><button class="btn ghost" data-act="cloud-disconnect">Disconnect</button>`:""}
   </div>
   ${statusLine}
   </div>
@@ -1574,13 +1548,16 @@ function bindStatic(){
       const v=($("#cloudUrlInput")||{}).value.trim();
       if(!v){toast("Paste the web app URL first.");return;}
       setEndpoint(v);
-      pullFromCloud(true).then(()=>pushAllToCloud(false));
+      toast("Connected. Use \"Save to cloud\" whenever you want to back up, or \"Restore from backup\" to pull it down.");
       render();
     }
-    else if(act==="cloud-sync")pullFromCloud(true);
-    else if(act==="cloud-push-all")pushAllToCloud(true);
+    else if(act==="cloud-save")saveToCloud(true);
+    else if(act==="cloud-restore"){
+      if(!confirm("Restore from the cloud backup? This replaces everything on this device with whatever was last saved to the cloud — any changes here that haven't been saved yet will be lost. Continue?"))return;
+      restoreFromCloud(true);
+    }
     else if(act==="cloud-disconnect"){
-      if(!confirm("Disconnect from the shared Google Sheet? Data already saved in this browser is kept."))return;
+      if(!confirm("Disconnect from the cloud backup? Data already saved in this browser is kept."))return;
       setEndpoint(""); CLOUD.status="off"; CLOUD.lastSync=null; render();
     }
     else if(act==="hol-add"){
@@ -1612,9 +1589,9 @@ function bindStatic(){
     const b=e.target.closest("[data-act]"); if(!b)return;
     const act=b.dataset.act;
     if(act==="pair-time"){
-      reRenderAnchored(b.dataset.code,()=>{
-        pairSetTime(S.activeMonth,b.dataset.code,b.dataset.date,+b.dataset.idx,b.dataset.side,b.value);
-      });
+      pairSetTime(S.activeMonth,b.dataset.code,b.dataset.date,+b.dataset.idx,b.dataset.side,b.value);
+      clearTimeout(window._pairRenderDebounce);
+      window._pairRenderDebounce=setTimeout(()=>{ if(!isTyping())render(); },900);
       return;
     }
     if(act==="rate"){
@@ -1653,23 +1630,6 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{S.t
 bindStatic();
 render();
 renderSyncBadge();
-if(getEndpoint())pullFromCloud(false);
-/* Keep two devices from drifting apart while both stay open: quietly re-check
-   the shared Sheet every 2 minutes. Skipped if the user is mid-edit in a field,
-   so a background sync never yanks focus away or resets an in-progress edit —
-   it just waits for the next cycle. */
-let syncPollHandle=null;
-function startSyncPolling(){
-  if(syncPollHandle)clearInterval(syncPollHandle);
-  syncPollHandle=setInterval(()=>{
-    if(!getEndpoint())return;
-    if(isTyping())return;
-    if(pendingPushes>0)return;                    // a save is still in flight — don't risk overwriting it
-    if(Date.now()-lastPushSettledAt<10000)return;  // give a just-finished save a moment to fully land
-    pullFromCloud(false);
-  },120000);
-}
-startSyncPolling();
 </script>
 </body>
 </html>
