@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timeclock — Attendance &amp; Payroll</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#16232f; --ink-soft:#4a5a68; --line:#d8dee4; --paper:#f5f6f7; --card:#fff;
+  --accent:#0e6d5f; --accent-soft:#e2f0ed; --amber:#b0700a; --amber-soft:#fdf1dc;
+  --red:#b3372f; --sun:#6a4fa3; --sun-soft:#efeaf8;
+  --mono:Consolas,'Courier New',monospace; --sans:'Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--paper)}
+.topbar{background:var(--ink);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-weight:700;letter-spacing:.06em;font-size:15px}
+.brand small{display:block;font-weight:400;font-size:11px;color:#9fb0be;letter-spacing:.12em}
+.tabs{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.tab{background:transparent;border:1px solid #33465a;color:#c7d2dc;padding:7px 14px;border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:500}
+.tab:hover{background:#243546}
+.tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 20px 80px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}
+h2{font-size:17px;margin:0 0 4px}
+.sub{color:var(--ink-soft);font-size:13px;margin:0 0 14px}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{background:var(--paper);filter:none}
+.btn.small{padding:5px 10px;font-size:12px}
+table.grid{width:100%;border-collapse:collapse;font-size:13px}
+table.grid th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--ink);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+table.grid td{padding:8px 10px;border-bottom:1px solid var(--line)}
+.mono{font-family:var(--mono)}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600}
+.pill.monthly{background:var(--accent-soft);color:var(--accent)}
+.pill.hourly{background:var(--amber-soft);color:var(--amber)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;background:#fff;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);color:var(--ink-soft)}
+.seg button.on-h{background:var(--amber);color:#fff}
+.seg button.on-m{background:var(--accent);color:#fff}
+input.txt,select.txt{border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-family:var(--mono);font-size:13px;background:#fff}
+input.txt.sans{font-family:var(--sans)}
+input.num{width:85px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.note{font-size:12px;color:var(--ink-soft)}
+.flag{color:var(--red);font-weight:700}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:36px;text-align:center;color:var(--ink-soft);background:#fff}
+.drop.on{border-color:var(--accent);background:var(--accent-soft)}
+.toast{background:var(--ink);color:#fff;padding:10px 24px;font-size:13px;display:none}
+.banner{background:var(--amber-soft);color:var(--amber);padding:10px 24px;font-size:13px;display:none;font-weight:600}
+.syncbadge{font-size:11px;padding:5px 11px;border-radius:99px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.syncbadge.off{background:#33465a;color:#c7d2dc}
+.syncbadge.syncing{background:var(--amber-soft);color:var(--amber)}
+.syncbadge.on{background:var(--accent-soft);color:var(--accent)}
+.syncbadge.error{background:#fbe4e1;color:var(--red)}
+/* payslip */
+.slip{background:#fff;border:1px solid var(--line);border-radius:8px;padding:26px 30px;margin-bottom:20px;max-width:780px}
+.slip-head{display:flex;justify-content:space-between;border-bottom:3px solid var(--ink);padding-bottom:12px;margin-bottom:14px}
+.slip-head h3{margin:0;font-size:18px;letter-spacing:.04em}
+.slip-head .co{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.slip-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;font-size:12px}
+.slip-meta div span{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+.slip-meta div b{font-family:var(--mono);font-size:13px}
+table.days{width:100%;border-collapse:collapse;font-size:11.5px;font-family:var(--mono)}
+table.days th{font-family:var(--sans);font-size:10px;letter-spacing:.06em;text-transform:uppercase;text-align:right;padding:4px 8px;border-bottom:1.5px solid var(--ink);color:var(--ink-soft)}
+table.days th.l{text-align:left}
+table.days td{padding:3px 8px;border-bottom:1px solid #eceff1;text-align:right;white-space:nowrap}
+table.days td.l{text-align:left}
+tr.wkend td{background:#f2f4f5}
+tr.sunday td{background:var(--sun-soft)}
+tr.abs td{color:#aab6bf}
+tr.err td{background:#fbe9e7}
+tr.pubhol td{background:#e3f0fb}
+.edited{color:var(--sun);font-weight:700}
+input.timeedit{width:220px;border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-family:var(--mono);font-size:11.5px}
+.bracket{display:inline-flex;align-items:center;gap:3px;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:2px 4px;margin:2px 4px 2px 0}
+input.btime{border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-family:var(--mono);font-size:11.5px;width:86px}
+.bottom{margin-top:14px;border-top:2px solid var(--ink);padding-top:10px;display:flex;justify-content:space-between;align-items:flex-end;gap:30px}
+.bottom table.tot{font-size:13px;border-collapse:collapse}
+.bottom table.tot td{padding:4px 24px 4px 0}
+.bottom table.tot td:last-child{font-family:var(--mono);text-align:right;min-width:110px}
+.bottom tr.net td{border-top:2px solid var(--ink);font-weight:700;font-size:15px;padding-top:8px}
+.sig-one{width:230px;flex-shrink:0;text-align:center;font-size:11px;color:var(--ink-soft)}
+.sig-one .line{border-top:1px solid var(--ink);margin-top:70px;padding-top:6px}
+.set-field{margin-bottom:14px}
+.set-field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+@media (max-width:720px){.slip-meta{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">TIMECLOCK<small>ATTENDANCE &amp; PAYROLL</small></div>
+  <div class="tabs">
+    <button class="tab" data-tab="upload">1 · Upload</button>
+    <button class="tab" data-tab="employees">2 · Employees</button>
+    <button class="tab" data-tab="payslips">3 · Payslips</button>
+    <button class="tab" data-tab="history">4 · History</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </div>
+  <span class="syncbadge off" id="syncBadge">☁ Not connected</span>
+</div>
+<div class="banner" id="banner">⚠ Browser storage is unavailable here — changes will be lost when you close this page. Use “Export data” to save your work, and open this file directly in Chrome/Edge for permanent saving.</div>
+<div class="toast" id="toast"></div>
+<div class="wrap" id="view"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   TIMECLOCK — standalone attendance & payroll
+   Rules implemented:
+   - Weekday schedule + Saturday schedule set in Settings (5.5-day week)
+   - Punches paired into sessions (1&2, 3&4, …); gaps not counted
+   - Time before official start not counted; OT starts after official end
+   - OT rounded DOWN in blocks (default 30 min)
+   - Sunday: all session hours paid at each employee's own Sunday rate
+   - Monthly staff: fixed salary + bonus only
+   - Times editable per day before printing (marked ✎)
+   ============================================================ */
+
+/* ---------- tiny helpers ---------- */
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,"0");
+const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const fmtH=h=>h.toFixed(2);
+function money(v,cur){return cur+Number(v||0).toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function t2s(t){ // "HH:MM", "HH:MM:SS", or "H:MM AM/PM" -> seconds
+  if(t==null)return null;
+  const s=String(t).trim();
+  const ampm=s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if(ampm){
+    let h=+ampm[1]%12; if(/pm/i.test(ampm[4]))h+=12;
+    return h*3600+(+ampm[2])*60+(+(ampm[3]||0));
+  }
+  const p=s.split(":").map(Number);
+  if(!p.length||p.some(isNaN))return null; return (p[0]||0)*3600+(p[1]||0)*60+(p[2]||0);
+}
+const s2t=s=>s==null?"—":pad(Math.floor(s/3600))+":"+pad(Math.floor(s%3600/60));
+function parseClockDate(s){
+  if(!s)return null; const str=String(s).trim().replace(/\//g,"-"); const p=str.split("-");
+  if(p.length!==3)return null;
+  if(p[0].length===4)return p[0]+"-"+pad(p[1])+"-"+pad(p[2]);
+  return p[2]+"-"+pad(p[1])+"-"+pad(p[0]);
+}
+/* US-style M/D/YYYY (Jibble-style exports) -> YYYY-MM-DD */
+function parseUSDate(s){
+  if(!s)return null;
+  const str=String(s).trim();
+  const m=str.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+  if(!m)return null;
+  const mo=+m[1],da=+m[2];
+  let yr=+m[3]; if(yr<100)yr+=2000;
+  if(mo<1||mo>12||da<1||da>31)return null;
+  return yr+"-"+pad(mo)+"-"+pad(da);
+}
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",4000);}
+
+/* ---------- storage (localStorage with in-memory fallback) ---------- */
+const MEM={};
+let LS_OK=true;
+try{localStorage.setItem("tc-test","1");localStorage.removeItem("tc-test");}catch(e){LS_OK=false;}
+if(!LS_OK)$("#banner").style.display="block";
+const sGet=(k,fb)=>{try{const v=LS_OK?localStorage.getItem("tc-"+k):MEM[k];return v?JSON.parse(v):fb;}catch(e){return fb;}};
+const sSet=(k,v)=>{
+  try{
+    const s=JSON.stringify(v);
+    if(LS_OK)localStorage.setItem("tc-"+k,s); else MEM[k]=s;
+    cloudPush(k,s);
+  }catch(e){toast("Warning: could not save ("+e.message+")");}
+};
+
+/* ---------- cloud sync (Google Sheet via Apps Script web app) ----------
+   The endpoint URL itself is stored locally (each device configures it once).
+   All other app data continues to write to localStorage instantly (so the UI
+   never waits on the network); every write is also pushed to the shared
+   Google Sheet in the background, and a full pull merges in whatever the
+   other device last saved. */
+const CLOUD={status:"off",lastSync:null,lastError:null}; // status: off|syncing|on|error
+function getEndpoint(){try{return localStorage.getItem("tc-cloud-endpoint")||"";}catch(e){return "";}}
+function setEndpoint(u){try{if(u)localStorage.setItem("tc-cloud-endpoint",u);else localStorage.removeItem("tc-cloud-endpoint");}catch(e){}}
+function renderSyncBadge(){
+  const b=$("#syncBadge"); if(!b)return;
+  const t=CLOUD.status==="off"?"☁ Not connected":
+    CLOUD.status==="syncing"?"☁ Syncing…":
+    CLOUD.status==="error"?"☁ Sync error":
+    "☁ Synced"+(CLOUD.lastSync?" "+CLOUD.lastSync.toTimeString().slice(0,5):"");
+  b.textContent=t;
+  b.className="syncbadge "+CLOUD.status;
+}
+let pendingPushes=0, lastPushSettledAt=0;
+/* Tracks every key whose local value hasn't been CONFIRMED saved to the Sheet
+   yet. As long as a key is dirty: (a) pullFromCloud will never overwrite it
+   with the (older) cloud value, and (b) it keeps retrying with backoff until
+   it succeeds. This is what stops a failed background save from silently
+   reverting to old data the next time anything syncs. */
+const dirtyKeys=new Set();
+/* Google Apps Script's web app responses are unreliable specifically for
+   fetch()/XHR — a well-documented platform limitation, confirmed here by GET
+   and POST both failing identically regardless of hosting or auth. Neither
+   of these techniques is a fetch() call, so neither is subject to that CORS
+   restriction at all:
+   - Reads: JSONP — a <script> tag loading the response as executable JS.
+   - Writes: a hidden <form> POST submitted into a hidden <iframe>, with the
+     result sent back via postMessage. Form submissions are plain browser
+     navigations, not fetch/XHR, so CORS doesn't apply to them either. */
+let jsonpCounter=0;
+function jsonpRequest(url,params,ms){
+  return new Promise((resolve,reject)=>{
+    const cbName="_tc_jsonp_"+(jsonpCounter++);
+    const script=document.createElement("script");
+    let settled=false;
+    const timer=setTimeout(()=>{ if(settled)return; settled=true; cleanup(); reject(new Error("Request timed out after "+((ms||25000)/1000)+"s")); },ms||25000);
+    function cleanup(){ delete window[cbName]; if(script.parentNode)script.parentNode.removeChild(script); clearTimeout(timer); }
+    window[cbName]=(data)=>{ if(settled)return; settled=true; cleanup(); resolve(data); };
+    script.onerror=()=>{ if(settled)return; settled=true; cleanup(); reject(new Error("Network error loading request")); };
+    const qs=Object.entries(Object.assign({},params,{callback:cbName})).map(([k,v])=>encodeURIComponent(k)+"="+encodeURIComponent(v)).join("&");
+    script.src=url+"?"+qs;
+    document.head.appendChild(script);
+  });
+}
+let iframeCounter=0;
+function formPostRequest(url,data,ms){
+  return new Promise((resolve,reject)=>{
+    const n=iframeCounter++;
+    const reqId="_tc_req_"+n+"_"+Date.now();
+    const iframeName="_tc_iframe_"+n;
+    const iframe=document.createElement("iframe");
+    iframe.name=iframeName; iframe.style.display="none";
+    document.body.appendChild(iframe);
+    const form=document.createElement("form");
+    form.method="POST"; form.action=url; form.target=iframeName; form.style.display="none";
+    const allData=Object.assign({},data,{reqId});
+    for(const k in allData){
+      const inp=document.createElement("input");
+      inp.type="hidden"; inp.name=k; inp.value=allData[k];
+      form.appendChild(inp);
+    }
+    document.body.appendChild(form);
+    let settled=false;
+    function cleanup(){
+      window.removeEventListener("message",onMsg);
+      clearTimeout(timer);
+      if(form.parentNode)form.parentNode.removeChild(form);
+      setTimeout(()=>{ if(iframe.parentNode)iframe.parentNode.removeChild(iframe); },1000);
+    }
+    const timer=setTimeout(()=>{ if(settled)return; settled=true; cleanup(); reject(new Error("Request timed out after "+((ms||25000)/1000)+"s")); },ms||25000);
+    function onMsg(ev){
+      if(!ev.data||ev.data.reqId!==reqId)return;
+      if(settled)return; settled=true;
+      cleanup();
+      if(ev.data.error)reject(new Error(ev.data.error)); else resolve(ev.data);
+    }
+    window.addEventListener("message",onMsg);
+    form.submit();
+  });
+}
+const retryTimers={};
+function cloudPush(key,valueStr,attempt){
+  attempt=attempt||0;
+  const url=getEndpoint(); if(!url)return;
+  dirtyKeys.add(key);
+  CLOUD.status="syncing"; renderSyncBadge();
+  pendingPushes++;
+  formPostRequest(url,{key,value:valueStr})
+    .then(d=>{
+      if(d&&d.error)throw new Error(d.error);
+      // only clear dirty if this is still the latest value for the key (a newer edit may have superseded this push)
+      const current=LS_OK?localStorage.getItem("tc-"+key):MEM[key];
+      if(current===valueStr)dirtyKeys.delete(key);
+      CLOUD.status="on"; CLOUD.lastSync=new Date(); renderSyncBadge();
+    })
+    .catch(e=>{
+      CLOUD.status="error"; CLOUD.lastError=e.message; renderSyncBadge();
+      const delay=Math.min(30000,2000*Math.pow(2,attempt)); // 2s,4s,8s,16s,30s cap
+      clearTimeout(retryTimers[key]);
+      retryTimers[key]=setTimeout(()=>{
+        const current=LS_OK?localStorage.getItem("tc-"+key):MEM[key];
+        if(current!=null&&dirtyKeys.has(key))cloudPush(key,current,attempt+1);
+      },delay);
+    })
+    .finally(()=>{ pendingPushes=Math.max(0,pendingPushes-1); lastPushSettledAt=Date.now(); });
+}
+async function pullFromCloud(showToast){
+  const url=getEndpoint(); if(!url)return;
+  CLOUD.status="syncing"; renderSyncBadge();
+  try{
+    const data=await jsonpRequest(url,{action:"getAll"});
+    if(data&&data.error)throw new Error(data.error);
+    for(const[k,vs]of Object.entries(data||{})){
+      if(dirtyKeys.has(k))continue; // protect a not-yet-confirmed local change from being reverted
+      try{if(LS_OK)localStorage.setItem("tc-"+k,vs); else MEM[k]=vs;}catch(e){}
+    }
+    S.settings=Object.assign({},DEF_SET,sGet("settings",{}));
+    S.employees=sGet("employees",{});
+    S.months=sGet("months",[]);
+    S.holidays=sGet("holidays",[]);
+    S.rateHistory=sGet("rateHistory",{});
+    S.monthData={}; S.bonuses={}; S.overrides={}; S.payslips={}; S.deductions={}; // clear lazy caches so loadMonth re-reads merged data
+    if(S.months.length){
+      if(!S.activeMonth||!S.months.includes(S.activeMonth))S.activeMonth=S.months[S.months.length-1];
+      loadMonth(S.activeMonth);
+    }
+    CLOUD.status="on"; CLOUD.lastSync=new Date(); CLOUD.lastError=null;
+    if(showToast)toast("Synced with cloud — showing the latest shared data.");
+    render();
+  }catch(e){
+    CLOUD.status="error"; CLOUD.lastError=e.message;
+    if(showToast)toast("Cloud sync failed: "+e.message);
+    renderSyncBadge();
+    if(S.tab==="settings")render(); // keep the visible status text in sync with the badge, not just the badge itself
+  }
+}
+async function pushAllToCloud(showToast){
+  const url=getEndpoint(); if(!url)return;
+  CLOUD.status="syncing"; renderSyncBadge();
+  try{
+    const keys=["settings","employees","months","holidays","rateHistory"];
+    for(const mk of S.months)keys.push("month-"+mk,"bonus-"+mk,"ov-"+mk,"payslips-"+mk,"deduct-"+mk);
+    for(const k of keys){
+      const raw=LS_OK?localStorage.getItem("tc-"+k):MEM[k];
+      if(raw==null)continue;
+      dirtyKeys.add(k);
+      await formPostRequest(url,{key:k,value:raw});
+      dirtyKeys.delete(k);
+    }
+    CLOUD.status="on"; CLOUD.lastSync=new Date(); CLOUD.lastError=null;
+    if(showToast)toast("Uploaded everything on this device to the cloud.");
+  }catch(e){
+    CLOUD.status="error"; CLOUD.lastError=e.message;
+    if(showToast)toast("Upload failed: "+e.message);
+  }
+  renderSyncBadge();
+  if(S.tab==="settings")render(); // keep the visible status text in sync with the badge, not just the badge itself
+}
+
+/* ---------- state ---------- */
+const DEF_SET={
+  company:"YOUR COMPANY PTE LTD", currency:"S$",
+  dayChangeHour:6,                       // new working day starts at this hour
+  wkStart:"08:30", wkEnd:"18:00",        // normal weekday hours
+  satStart:"08:30", satEnd:"13:00",      // normal Saturday hours
+  earlyOTBufferMin:45,                   // must clock in at least this many minutes before start to qualify for Early OT
+  lateOTBufferMin:30,                    // must still be working at least this many minutes after end to qualify for OT
+  minHoursWeekday:8, minHoursSaturday:4.5, // used to offset late-arrival shortfalls before OT is granted (see lateness offset)
+  lunchMinutes:60, lunchThresholdH:5,    // deduct lunch if worked time exceeds threshold
+  otBlockMin:30                          // OT rounded DOWN to blocks of this size
+};
+let S={
+  settings:Object.assign({},DEF_SET,sGet("settings",{})),
+  employees:sGet("employees",{}),         // code -> {name,category:'daily'|'monthly',dayRate,monthlySalary,otRate}
+  months:sGet("months",[]),               // ["2026-07",...]
+  holidays:sGet("holidays",[]),           // [{date:"2026-08-09",label:"National Day"}, ...]
+  rateHistory:sGet("rateHistory",{}),     // code -> [{date,field,from,to,note}, ...] sorted by date
+  monthData:{}, bonuses:{}, overrides:{}, payslips:{}, deductions:{}, // lazily loaded per month
+  tab:"upload", activeMonth:null, selEmp:"ALL", editCodes:{},
+  histEmp:null, histRange:"12", histView:null, histMode:"employee", histMonth:null, rateHistEmp:null
+};
+function loadMonth(mk){
+  if(!mk)return;
+  S.activeMonth=mk;
+  if(!(mk in S.monthData)){
+    S.monthData[mk]=sGet("month-"+mk,null);
+    S.bonuses[mk]=sGet("bonus-"+mk,{});
+    S.deductions[mk]=sGet("deduct-"+mk,{});
+    S.overrides[mk]=sGet("ov-"+mk,{});
+  }
+  loadPayslipsFor(mk);
+}
+function loadPayslipsFor(mk){
+  if(!(mk in S.payslips))S.payslips[mk]=sGet("payslips-"+mk,{});
+  return S.payslips[mk];
+}
+function isHoliday(dateKey){
+  return S.holidays.find(h=>h.date===dateKey)||null;
+}
+function saveHolidays(){
+  S.holidays.sort((a,b)=>a.date.localeCompare(b.date));
+  sSet("holidays",S.holidays);
+}
+const FIELD_LABEL={dayRate:"Day rate",monthlySalary:"Monthly salary",otRate:"OT rate"};
+function logRateChange(code,field,from,to,dateStr,note){
+  if(from===to)return;
+  S.rateHistory[code]=S.rateHistory[code]||[];
+  S.rateHistory[code].push({date:dateStr||new Date().toISOString().slice(0,10),field,from,to,note:note||""});
+  S.rateHistory[code].sort((a,b)=>a.date.localeCompare(b.date));
+  sSet("rateHistory",S.rateHistory);
+}
+/* MOM-gazetted Singapore public holidays for 2026, plus the in-lieu Monday
+   for any that fall on a Sunday. Hari Raya Puasa/Haji are provisional
+   (moon-sighting dependent) and may shift by a day closer to the date. */
+const SG_HOLIDAYS_2026=[
+  {date:"2026-01-01",label:"New Year's Day"},
+  {date:"2026-02-17",label:"Chinese New Year"},
+  {date:"2026-02-18",label:"Chinese New Year (Day 2)"},
+  {date:"2026-03-21",label:"Hari Raya Puasa (provisional)"},
+  {date:"2026-04-03",label:"Good Friday"},
+  {date:"2026-05-01",label:"Labour Day"},
+  {date:"2026-05-27",label:"Hari Raya Haji (provisional)"},
+  {date:"2026-05-31",label:"Vesak Day"},
+  {date:"2026-06-01",label:"Vesak Day (in lieu)"},
+  {date:"2026-08-09",label:"National Day"},
+  {date:"2026-08-10",label:"National Day (in lieu)"},
+  {date:"2026-11-08",label:"Deepavali"},
+  {date:"2026-11-09",label:"Deepavali (in lieu)"},
+  {date:"2026-12-25",label:"Christmas Day"}
+];
+if(!S.holidays.length){ S.holidays=SG_HOLIDAYS_2026.slice(); saveHolidays(); }
+if(S.months.length)loadMonth(S.months[S.months.length-1]);
+
+/* ---------- shift-day / calculations ----------
+   A "shift day" runs from dayChangeHour to dayChangeHour the next calendar
+   day (default 6am-6am), not midnight-midnight. A session that straddles
+   that boundary is split, with the portion before the boundary credited to
+   the PREVIOUS shift day. Editing/error-flagging still happens on the raw
+   calendar date the punches were actually recorded on; only the hours/OT
+   totals are computed per shift day. */
+function dateKeyToEpochDay(dateKey){
+  const[y,m,d]=dateKey.split("-").map(Number);
+  return Math.floor(Date.UTC(y,m-1,d)/86400000);
+}
+function epochDayToDateKey(ed){
+  const dt=new Date(ed*86400000);
+  return dt.getUTCFullYear()+"-"+pad(dt.getUTCMonth()+1)+"-"+pad(dt.getUTCDate());
+}
+function timesToSecs(times){
+  return [...new Set((times||[]).map(t2s).filter(s=>s!=null))].sort((a,b)=>a-b);
+}
+function pairSecs(secs){
+  const sessions=[]; let odd=null;
+  for(let i=0;i+1<secs.length;i+=2)sessions.push([secs[i],secs[i+1]]);
+  if(secs.length%2===1)odd=secs[secs.length-1];
+  return{sessions,odd,count:secs.length};
+}
+function pairSessions(times){ return pairSecs(timesToSecs(times)); }
+const overlap=(a1,a2,b1,b2)=>Math.max(0,Math.min(a2,b2)-Math.max(a1,b1));
+function floorBlock(hours,blockMin){
+  if(blockMin<=0)return hours;
+  const b=blockMin/60; return Math.floor(hours/b+1e-9)*b;
+}
+function minHoursFor(dow){ return dow===6?S.settings.minHoursSaturday:S.settings.minHoursWeekday; }
+function scheduleFor(dow,set){
+  if(dow===6)return{start:t2s(set.satStart),end:t2s(set.satEnd)};
+  return{start:t2s(set.wkStart),end:t2s(set.wkEnd)}; // Sun + weekdays: same schedule (shift work, no day-of-week premium)
+}
+/* splits an absolute [absIn,absOut) session into shift-day-bounded sub-intervals */
+function splitSessionByShiftDay(absIn,absOut,dayChangeSec){
+  const segs=[]; let cur=absIn, guard=0;
+  while(cur<absOut&&guard++<20){
+    const sd=Math.floor((cur-dayChangeSec)/86400);
+    const boundary=(sd+1)*86400+dayChangeSec;
+    const segEnd=Math.min(absOut,boundary);
+    segs.push({sd,start:cur,end:segEnd});
+    cur=segEnd;
+  }
+  return segs;
+}
+function effectiveTimes(mk,code,dateKey){
+  const ov=S.overrides[mk]&&S.overrides[mk][code]&&S.overrides[mk][code][dateKey];
+  if(ov!==undefined)return{times:ov,edited:true};
+  const raw=S.monthData[mk]&&S.monthData[mk][code]&&S.monthData[mk][code].days[dateKey];
+  return{times:raw||null,edited:false};
+}
+/* Core/Early-OT/OT split for one shift-day's aggregated segments.
+   - Time within [NS,NE] is always Regular.
+   - Time before NS only becomes Early OT if the worker's first clock-in
+     was at/before (NS - earlyOTBufferMin); otherwise it's folded into Regular
+     (worked time is never simply discarded).
+   - Time after NE only becomes OT if the worker's last clock-out was at/after
+     (NE + lateOTBufferMin) — and when it qualifies, ALL time from NE onward
+     counts as OT (not just the time past the buffer). Otherwise it's folded
+     into Regular.
+   - Lateness offset: if Regular still falls short of the daily minimum after
+     the above, hours are borrowed back from OT (late first, then early) to
+     make up the shortfall before any OT is granted. */
+function splitDayHours(segments,dow,set,ed){
+  const sched=scheduleFor(dow,set);
+  const dayBase=ed*86400;
+  const NS=dayBase+sched.start, NE=dayBase+sched.end;
+  const earlyCut=NS-(set.earlyOTBufferMin||0)*60;
+  const lateCut=NE+(set.lateOTBufferMin||0)*60;
+  if(!segments.length)return{reg:0,earlyOT:0,lateOT:0};
+  let tIn=Infinity,tOut=-Infinity;
+  for(const s of segments){
+    if(s.start<tIn)tIn=s.start;
+    if(s.end>tOut)tOut=s.end;
+  }
+  const earlyQualifies=tIn<=earlyCut;
+  const lateQualifies=tOut>=lateCut;
+  let coreSec=0,earlySec=0,lateSec=0;
+  for(const s of segments){
+    coreSec+=overlap(s.start,s.end,NS,NE);
+    const beforeNS=overlap(s.start,s.end,-Infinity,NS);
+    const afterNE=overlap(s.start,s.end,NE,Infinity);
+    if(earlyQualifies)earlySec+=beforeNS; else coreSec+=beforeNS;
+    if(lateQualifies)lateSec+=afterNE; else coreSec+=afterNE;
+  }
+  let coreH=coreSec/3600;
+  if(coreH>set.lunchThresholdH)coreH=Math.max(0,coreH-set.lunchMinutes/60);
+  let earlyH=earlySec/3600, lateH=lateSec/3600;
+  const minH=minHoursFor(dow);
+  let shortfall=Math.max(0,minH-coreH);
+  const borrowLate=Math.min(shortfall,lateH); coreH+=borrowLate; lateH-=borrowLate; shortfall-=borrowLate;
+  const borrowEarly=Math.min(shortfall,earlyH); coreH+=borrowEarly; earlyH-=borrowEarly; shortfall-=borrowEarly;
+  return{
+    reg:coreH,
+    earlyOT:floorBlock(earlyH,set.otBlockMin),
+    lateOT:floorBlock(lateH,set.otBlockMin)
+  };
+}
+/* Manual edits can be stored two ways:
+   - legacy flat list of times (old edit box, and all imported data): sorted and
+     paired automatically, with the existing cross-day "borrow" safety net.
+   - explicit pairs [{in,out}] (new bracket editor): position is fixed by the
+     user, so out < in simply means the session runs past midnight — no
+     re-sorting, and no automatic cross-day borrowing either way, since the
+     user has already taken full manual control of this day's pairing. */
+function isPairedOverride(v){ return Array.isArray(v)&&v.length>0&&typeof v[0]==="object"&&v[0]!==null; }
+function getPairedOverride(mk,code,dateKey){
+  const v=S.overrides[mk]&&S.overrides[mk][code]&&S.overrides[mk][code][dateKey];
+  return isPairedOverride(v)?v:null;
+}
+function editablePairsFor(mk,code,dateKey){
+  const paired=getPairedOverride(mk,code,dateKey);
+  if(paired)return paired.map(p=>({in:p.in||"",out:p.out||""}));
+  const{times}=effectiveTimes(mk,code,dateKey);
+  const secs=timesToSecs(times);
+  const{sessions,odd}=pairSecs(secs);
+  const pairs=sessions.map(([i,o])=>({in:s2t(i),out:s2t(o)}));
+  if(odd!=null)pairs.push({in:s2t(odd),out:""});
+  return pairs;
+}
+function savePairedOverride(mk,code,dateKey,pairs){
+  S.overrides[mk]=S.overrides[mk]||{};
+  S.overrides[mk][code]=S.overrides[mk][code]||{};
+  S.overrides[mk][code][dateKey]=pairs;
+  sSet("ov-"+mk,S.overrides[mk]);
+}
+function computeMonth(mk,code){
+  const set=S.settings;
+  const[y,m]=mk.split("-").map(Number);
+  const dim=new Date(y,m,0).getDate();
+  const dayChangeSec=(set.dayChangeHour||0)*3600;
+
+  // Pass 1: raw per-calendar-date punch pairing (editing + error-flagging source of truth),
+  // then split each paired session into shift-day-bounded fragments.
+  // Special case: if a day ends with an unpaired trailing punch, and the very next
+  // day's first punch falls before the day-change hour, treat them as one overnight
+  // session (e.g. clock in 8:33am, clock out 2:36am the next day) rather than two
+  // separate errors. Any other gap keeps flagging as a likely missed punch.
+  const rawByDate={};
+  const shiftSegments={};
+  const consumedFirst={}; // dateKey -> true if that day's first punch was borrowed by the previous day
+  for(let d=1;d<=dim;d++){
+    const dateKey=y+"-"+pad(m)+"-"+pad(d);
+    const ed=dateKeyToEpochDay(dateKey);
+    const pairedOv=getPairedOverride(mk,code,dateKey);
+    if(pairedOv){
+      let sessions=[],odd=null,crossDay=[];
+      for(const pair of pairedOv){
+        const inSec=t2s(pair.in);
+        if(inSec==null)continue;
+        const outSec=pair.out?t2s(pair.out):null;
+        if(outSec==null){ odd=inSec; continue; }
+        if(outSec>=inSec)sessions.push([inSec,outSec]);
+        else crossDay.push([ed*86400+inSec,(ed+1)*86400+outSec]);
+      }
+      rawByDate[dateKey]={sessions,odd,edited:true,count:pairedOv.length,secs:[]};
+      for(const[i,o]of sessions){
+        const parts=splitSessionByShiftDay(ed*86400+i,ed*86400+o,dayChangeSec);
+        for(const p of parts){
+          const shiftKey=epochDayToDateKey(p.sd);
+          (shiftSegments[shiftKey]=shiftSegments[shiftKey]||[]).push({start:p.start,end:p.end,fromDate:dateKey});
+        }
+      }
+      for(const[absIn,absOut]of crossDay){
+        const parts=splitSessionByShiftDay(absIn,absOut,dayChangeSec);
+        for(const p of parts){
+          const shiftKey=epochDayToDateKey(p.sd);
+          (shiftSegments[shiftKey]=shiftSegments[shiftKey]||[]).push({start:p.start,end:p.end,fromDate:dateKey});
+        }
+      }
+      continue;
+    }
+    const{times,edited}=effectiveTimes(mk,code,dateKey);
+    const fullSecs=timesToSecs(times); // shown for editing, always complete
+    let secs=consumedFirst[dateKey]?fullSecs.slice(1):fullSecs; // used for this day's own pairing
+    if(!secs.length){ rawByDate[dateKey]={sessions:[],odd:null,edited,count:0,secs:fullSecs}; continue; }
+    let{sessions,odd,count}=pairSecs(secs);
+    let borrowedSession=null; // [absIn,absOut] if this day's trailing punch pairs with tomorrow's first
+    if(odd!=null&&d<dim){
+      const oddSec=odd;
+      const nextDateKey=y+"-"+pad(m)+"-"+pad(d+1);
+      const{times:nextTimes}=effectiveTimes(mk,code,nextDateKey);
+      const nextSecs=timesToSecs(nextTimes);
+      if(nextSecs.length&&nextSecs[0]<dayChangeSec){
+        borrowedSession=[ed*86400+oddSec, dateKeyToEpochDay(nextDateKey)*86400+nextSecs[0]];
+        consumedFirst[nextDateKey]=true;
+        odd=null;
+      }
+    }
+    rawByDate[dateKey]={sessions,odd,edited,count,secs:fullSecs};
+    for(const[i,o]of sessions){
+      const parts=splitSessionByShiftDay(ed*86400+i,ed*86400+o,dayChangeSec);
+      for(const p of parts){
+        const shiftKey=epochDayToDateKey(p.sd);
+        (shiftSegments[shiftKey]=shiftSegments[shiftKey]||[]).push({start:p.start,end:p.end,fromDate:dateKey});
+      }
+    }
+    if(borrowedSession){
+      const parts=splitSessionByShiftDay(borrowedSession[0],borrowedSession[1],dayChangeSec);
+      for(const p of parts){
+        const shiftKey=epochDayToDateKey(p.sd);
+        (shiftSegments[shiftKey]=shiftSegments[shiftKey]||[]).push({start:p.start,end:p.end,fromDate:dateKey});
+      }
+    }
+  }
+
+  // Pass 2: build one row per shift-day (same 1..dim date range), applying
+  // the Early-OT/Regular/OT qualification split and the lateness offset.
+  const rows=[]; let totReg=0,totEarlyOT=0,totOT=0,present=0,flags=0,edits=0,fullDays=0;
+  for(let d=1;d<=dim;d++){
+    const dateKey=y+"-"+pad(m)+"-"+pad(d);
+    const dow=new Date(y,m-1,d).getDay();
+    const raw=rawByDate[dateKey]||{sessions:[],odd:null,edited:false,count:0};
+    if(raw.odd!=null)flags++;
+    if(raw.edited)edits++;
+    const segments=(shiftSegments[dateKey]||[]).sort((a,b)=>a.start-b.start);
+    const{reg,earlyOT,lateOT}=splitDayHours(segments,dow,set,dateKeyToEpochDay(dateKey));
+    const hasWork=segments.length>0;
+    const hasRow=hasWork||raw.count>0;
+    const minH=minHoursFor(dow);
+    if(hasWork)present++;
+    if(hasWork)fullDays++;
+    totReg+=reg; totEarlyOT+=earlyOT; totOT+=lateOT;
+    rows.push({
+      d,dateKey,dow,
+      raw,
+      rec: hasRow?{segments,reg,earlyOT,ot:lateOT,hours:reg+earlyOT+lateOT,odd:raw.odd,edited:raw.edited,stdHours:minH}:null
+    });
+  }
+  return{rows,totReg,totEarlyOT,totOT,present,flags,edits,fullDays,dim};
+}
+function bonusItems(mk,code){
+  const b=(S.bonuses[mk]&&S.bonuses[mk][code])||null;
+  if(!b)return[];
+  if(Array.isArray(b.items))return b.items;
+  if((+b.amount||0)!==0||b.note)return[{label:b.note||"Bonus",amount:+b.amount||0}]; // migrate old single-bonus format
+  return[];
+}
+function setBonusItems(mk,code,items){
+  S.bonuses[mk]=S.bonuses[mk]||{};
+  S.bonuses[mk][code]={items};
+  sSet("bonus-"+mk,S.bonuses[mk]);
+}
+function deductionItems(mk,code){
+  const d=(S.deductions[mk]&&S.deductions[mk][code])||null;
+  return d&&Array.isArray(d.items)?d.items:[];
+}
+function setDeductionItems(mk,code,items){
+  S.deductions[mk]=S.deductions[mk]||{};
+  S.deductions[mk][code]={items};
+  sSet("deduct-"+mk,S.deductions[mk]);
+}
+function payFor(code,calc){
+  const e=S.employees[code]||{},set=S.settings,cur=set.currency;
+  const items=bonusItems(S.activeMonth,code);
+  const bTotal=items.reduce((s,i)=>s+(+i.amount||0),0);
+  const deductions=deductionItems(S.activeMonth,code);
+  const dTotal=deductions.reduce((s,i)=>s+(+i.amount||0),0);
+  const or=+e.otRate||0;
+  const earlyOTPay=calc.totEarlyOT*or;
+  const otPay=calc.totOT*or;
+  const cat=e.category==="monthly"?"monthly":"daily";
+  let lines=[],gross=0;
+  if(cat==="daily"){
+    const dr=+e.dayRate||0;
+    const dayPay=calc.fullDays*dr;
+    lines=[
+      ["Day rate: "+calc.fullDays+" day(s) worked × "+money(dr,cur),dayPay],
+      ["Early OT "+fmtH(calc.totEarlyOT)+" h × "+money(or,cur),earlyOTPay],
+      ["Overtime "+fmtH(calc.totOT)+" h × "+money(or,cur),otPay]
+    ];
+    gross=dayPay+earlyOTPay+otPay;
+  }else{
+    const sal=+e.monthlySalary||0;
+    lines=[
+      ["Basic monthly salary",sal],
+      ["Early OT "+fmtH(calc.totEarlyOT)+" h × "+money(or,cur),earlyOTPay],
+      ["Overtime "+fmtH(calc.totOT)+" h × "+money(or,cur),otPay]
+    ];
+    gross=sal+earlyOTPay+otPay;
+  }
+  return{lines,gross,items,bTotal,deductions,dTotal,net:gross+bTotal-dTotal};
+}
+
+/* ---------- Excel import ---------- */
+function findCol(headers,...cands){
+  const norm=s=>String(s).toLowerCase().replace(/[^a-z]/g,"");
+  const H=headers.map(norm);
+  for(const c of cands){const i=H.indexOf(norm(c));if(i>=0)return i;}
+  for(const c of cands){const i=H.findIndex(h=>h.includes(norm(c)));if(i>=0)return i;}
+  return -1;
+}
+function importFile(file){
+  if(!file)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+      if(!raw.length)throw new Error("Sheet is empty");
+      const H=raw[0];
+      const cCode=findCol(H,"EmployeeCode","Employee Code","EmpCode","Member Code");
+      const cName=findCol(H,"Employee Name","EmployeeName","Name");
+      const cDate=findCol(H,"Clock Date","ClockDate","Date");
+      const cTime=findCol(H,"Clock Time","ClockTime","Time");
+      if(cCode<0||cDate<0||cTime<0)throw new Error("Could not find Employee Code / Clock Date / Clock Time columns");
+      const isJibble=findCol(H,"EntryType")>=0||findCol(H,"Member Code")>=0;
+      const parseDate=isJibble?parseUSDate:parseClockDate;
+      const byMonth={}; let n=0;
+      for(let i=1;i<raw.length;i++){
+        const r=raw[i];
+        const code=String(r[cCode]||"").trim();
+        const date=parseDate(r[cDate]);
+        const time=String(r[cTime]||"").trim();
+        if(!code||!date||!time)continue;
+        const mk=date.slice(0,7);
+        byMonth[mk]=byMonth[mk]||{};
+        const emp=byMonth[mk][code]=byMonth[mk][code]||{name:cName>=0?String(r[cName]||"").trim():code,days:{}};
+        (emp.days[date]=emp.days[date]||[]).push(time);
+        n++;
+      }
+      const mks=Object.keys(byMonth).sort();
+      if(!mks.length)throw new Error("No valid rows found");
+      // merge employee master (keep saved category/rates)
+      for(const mk of mks)for(const[code,e]of Object.entries(byMonth[mk])){
+        S.employees[code]=Object.assign({category:"daily",dayRate:0,otRate:0,monthlySalary:0,status:"active"},S.employees[code],{name:e.name||((S.employees[code]||{}).name)||code});
+      }
+      sSet("employees",S.employees);
+      for(const mk of mks){
+        loadMonth(mk);
+        const merged=S.monthData[mk]||{};
+        for(const[code,e]of Object.entries(byMonth[mk])){
+          if(merged[code])Object.assign(merged[code].days,e.days),merged[code].name=e.name;
+          else merged[code]=e;
+        }
+        S.monthData[mk]=merged; sSet("month-"+mk,merged);
+        if(!S.months.includes(mk))S.months.push(mk);
+      }
+      S.months.sort(); sSet("months",S.months);
+      loadMonth(mks[mks.length-1]);
+      toast("Imported "+n+" clock records: "+mks.join(", "));
+      S.tab="employees"; render();
+    }catch(err){toast("Import failed: "+err.message);}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+/* ---------- rate history import (wide format: Code, Name, then one column per month) ---------- */
+function parseMonthHeader(h){
+  if(h instanceof Date)return h.getFullYear()+"-"+pad(h.getMonth()+1);
+  if(typeof h==="number"){ const d=new Date(Math.round((h-25569)*86400*1000)); return d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1); }
+  const s=String(h||"").trim();
+  const m=s.match(/^(\d{4})-(\d{2})-\d{2}/);
+  if(m)return m[1]+"-"+m[2];
+  const d2=new Date(s);
+  if(!isNaN(d2.getTime()))return d2.getFullYear()+"-"+pad(d2.getMonth()+1);
+  return null;
+}
+function parseRateCell(v){
+  if(v==null||v==="")return null;
+  if(typeof v==="number")return{rate:v,increment:0};
+  const s=String(v).trim();
+  if(/^HL$/i.test(s))return null;      // ignore, per instruction
+  if(/^Join$/i.test(s))return null;    // just a hire-month marker, no rate value
+  const m=s.match(/^(-?\d+(?:\.\d+)?)\s*\(\s*\+\s*(\d+(?:\.\d+)?)\s*\)/);
+  if(m)return{rate:parseFloat(m[1])+parseFloat(m[2]),base:parseFloat(m[1]),increment:parseFloat(m[2])};
+  const n=parseFloat(s);
+  if(!isNaN(n))return{rate:n,increment:0};
+  return null;
+}
+function normalizeCode(v){return String(v==null?"":v).trim().replace(/\.0$/,"");}
+function importRateHistoryFile(file){
+  if(!file)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+      if(!raw.length)throw new Error("Sheet is empty");
+      const headers=raw[0];
+      const cCode=findCol(headers,"Code","Employee Code");
+      const cName=findCol(headers,"Employee Name","Name");
+      if(cCode<0)throw new Error("Could not find a Code column");
+      const monthCols=[];
+      for(let c=Math.max(cCode,cName)+1;c<headers.length;c++){
+        const mk=parseMonthHeader(headers[c]);
+        if(mk)monthCols.push({c,mk});
+      }
+      monthCols.sort((a,b)=>a.mk.localeCompare(b.mk)); // oldest first, regardless of source column order
+
+      let matched=0,unmatched=[],changesLogged=0,anomalies=0;
+      for(let r=1;r<raw.length;r++){
+        const row=raw[r];
+        const rawCode=normalizeCode(row[cCode]);
+        if(!rawCode)continue;
+        const empCode=S.employees[rawCode]?rawCode:null;
+        if(!empCode){ if(rawCode)unmatched.push(rawCode+(cName>=0&&row[cName]?" ("+row[cName]+")":"")); continue; }
+        matched++;
+        let prevEff=null, prevWasIncrement=false;
+        for(const{c,mk}of monthCols){
+          const parsed=parseRateCell(row[c]);
+          if(!parsed)continue;
+          const eff=parsed.rate;
+          if(prevEff!=null&&eff!==prevEff){
+            let note=parsed.increment>0?("recorded as "+parsed.base+"(+"+parsed.increment+")"):"";
+            if(prevWasIncrement&&eff<prevEff){ note="⚠ reverted from expected "+prevEff+" — check source data"; anomalies++; }
+            const existing=(S.rateHistory[empCode]||[]).find(h=>h.field==="dayRate"&&h.date===mk+"-01");
+            if(!existing){
+              S.rateHistory[empCode]=S.rateHistory[empCode]||[];
+              S.rateHistory[empCode].push({date:mk+"-01",field:"dayRate",from:prevEff,to:eff,note});
+              changesLogged++;
+            }
+          }
+          prevEff=eff; prevWasIncrement=parsed.increment>0;
+        }
+        if(S.rateHistory[empCode])S.rateHistory[empCode].sort((a,b)=>a.date.localeCompare(b.date));
+      }
+      sSet("rateHistory",S.rateHistory);
+      let msg=`Rate history import: ${matched} employee(s) matched, ${changesLogged} change(s) logged`+(anomalies?`, ${anomalies} flagged for review`:"")+".";
+      if(unmatched.length)msg+=` ${unmatched.length} code(s) not found in Employees: ${unmatched.slice(0,5).join(", ")}${unmatched.length>5?"…":""}.`;
+      toast(msg);
+      render();
+    }catch(err){toast("Rate history import failed: "+err.message);}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+/* ---------- backup / sync ---------- */
+function exportData(){
+  const dump={settings:S.settings,employees:S.employees,months:S.months,holidays:S.holidays,rateHistory:S.rateHistory,monthData:{},bonuses:{},overrides:{},payslips:{},deductions:{}};
+  for(const mk of S.months){
+    loadMonth(mk);
+    dump.monthData[mk]=S.monthData[mk]; dump.bonuses[mk]=S.bonuses[mk]; dump.overrides[mk]=S.overrides[mk];
+    dump.payslips[mk]=loadPayslipsFor(mk); dump.deductions[mk]=S.deductions[mk];
+  }
+  const blob=new Blob([JSON.stringify(dump)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="timeclock-data-"+new Date().toISOString().slice(0,10)+".json";
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function importData(file){
+  if(!file)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(!d.employees||!d.months)throw new Error("Not a Timeclock data file");
+      S.settings=Object.assign({},DEF_SET,d.settings); sSet("settings",S.settings);
+      S.employees=d.employees; sSet("employees",S.employees);
+      S.months=d.months; sSet("months",S.months);
+      S.holidays=d.holidays||[]; sSet("holidays",S.holidays);
+      S.rateHistory=d.rateHistory||{}; sSet("rateHistory",S.rateHistory);
+      for(const mk of d.months){
+        S.monthData[mk]=d.monthData[mk]||{}; sSet("month-"+mk,S.monthData[mk]);
+        S.bonuses[mk]=(d.bonuses||{})[mk]||{}; sSet("bonus-"+mk,S.bonuses[mk]);
+        S.overrides[mk]=(d.overrides||{})[mk]||{}; sSet("ov-"+mk,S.overrides[mk]);
+        S.payslips[mk]=(d.payslips||{})[mk]||{}; sSet("payslips-"+mk,S.payslips[mk]);
+        S.deductions[mk]=(d.deductions||{})[mk]||{}; sSet("deduct-"+mk,S.deductions[mk]);
+      }
+      if(S.months.length)loadMonth(S.months[S.months.length-1]);
+      toast("Data imported — everything replaced with the file's contents.");
+      render();
+    }catch(err){toast("Import failed: "+err.message);}
+  };
+  rd.readAsText(file);
+}
+
+/* ---------- renderers ---------- */
+function render(){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===S.tab));
+  const v=$("#view");
+  if(S.tab==="upload")v.innerHTML=rUpload();
+  else if(S.tab==="employees")v.innerHTML=rEmployees();
+  else if(S.tab==="payslips")v.innerHTML=rPayslips();
+  else if(S.tab==="history")v.innerHTML=rHistory();
+  else v.innerHTML=rSettings();
+  bind();
+}
+function monthLabel(mk){const[y,m]=mk.split("-");return MN[m-1]+" "+y;}
+
+function rUpload(){
+  return `
+  <div class="card"><h2>Upload monthly attendance file</h2>
+  <p class="sub">Drop the raw Excel export from the attendance device. Records are grouped by month; re-uploading the same month merges new records in — manual time edits you've already made are never overwritten.</p>
+  <div class="drop" id="drop"><p style="margin:0 0 12px">Drag the .xlsx file here, or</p>
+    <label class="btn" style="display:inline-block">Choose file<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none"></label>
+  </div></div>
+  <p class="note">To open, print, or manage a month you've already uploaded, use the <b>Payslips</b> tab (pick the month there) or the <b>History</b> tab. Backup and cloud sync are under <b>Settings</b>.</p>`;
+}
+
+function rEmployees(){
+  const cur=S.settings.currency;
+  const codes=Object.keys(S.employees).sort((a,b)=>{
+    const sa=S.employees[a].status==="inactive"?1:0, sb=S.employees[b].status==="inactive"?1:0;
+    if(sa!==sb)return sa-sb;
+    return a.localeCompare(b,undefined,{numeric:true});
+  });
+  if(!codes.length)return `<div class="card"><h2>No employees yet</h2><p class="sub">Upload an attendance file first — employees are picked up automatically.</p></div>`;
+  const q=(S._q||"").toLowerCase();
+  const list=codes.filter(c=>!q||c.toLowerCase().includes(q)||(S.employees[c].name||"").toLowerCase().includes(q));
+  const nDaily=codes.filter(c=>S.employees[c].category!=="monthly").length;
+  const nM=codes.length-nDaily;
+  const nInactive=codes.filter(c=>S.employees[c].status==="inactive").length;
+  let dividerShown=false;
+  const rows=list.map(c=>{
+    const e=S.employees[c],cat=e.category==="monthly"?"monthly":"daily";
+    const histCount=(S.rateHistory[c]||[]).length;
+    const inactive=e.status==="inactive";
+    let divider="";
+    if(inactive&&!dividerShown){
+      dividerShown=true;
+      divider=`<tr><td colspan="7" style="background:var(--paper);padding:8px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);font-weight:600">Inactive / Resigned</td></tr>`;
+    }
+    return `${divider}<tr style="${inactive?"opacity:.55":""}">
+      <td class="mono">${esc(c)}</td><td>${esc(e.name)}</td>
+      <td><span class="seg">
+        <button class="${cat==="daily"?"on-h":""}" data-act="cat" data-code="${esc(c)}" data-v="daily">Day rate</button>
+        <button class="${cat==="monthly"?"on-m":""}" data-act="cat" data-code="${esc(c)}" data-v="monthly">Monthly</button>
+      </span></td>
+      <td>${cat==="daily"?`<span class="mono">${cur}<input class="txt num" type="number" step="1" min="0" value="${e.dayRate||0}" data-act="rate" data-code="${esc(c)}" data-f="dayRate">/day</span>`:`<span class="note">—</span>`}</td>
+      <td>${cat==="monthly"?`<span class="mono">${cur}<input class="txt num" type="number" step="10" min="0" value="${e.monthlySalary||0}" data-act="rate" data-code="${esc(c)}" data-f="monthlySalary"></span>`:`<span class="note">—</span>`}</td>
+      <td><span class="mono">${cur}<input class="txt num" type="number" step="0.05" min="0" value="${e.otRate||0}" data-act="rate" data-code="${esc(c)}" data-f="otRate">/hr</span></td>
+      <td><button class="btn ghost small" data-act="rate-hist" data-code="${esc(c)}">History${histCount?` (${histCount})`:""}</button>
+      <button class="btn ghost small" data-act="toggle-active" data-code="${esc(c)}">${inactive?"Reactivate":"Mark inactive"}</button></td>
+    </tr>`;
+  }).join("");
+  const histCode=S.rateHistEmp;
+  const histPanel=histCode&&S.employees[histCode]?rateHistoryPanel(histCode):"";
+  return `<div class="card"><h2>Employees</h2>
+  <p class="sub">Set each person's pay scheme and rate — saved automatically and remembered every month. Both schemes earn overtime on top of their base pay. Every rate change you make here is logged automatically — click History on any row to see it.</p>
+  <div class="row" style="margin-bottom:14px">
+    <input class="txt sans" style="width:260px" placeholder="Search code or name…" id="empSearch" value="${esc(S._q||"")}">
+    <span class="note"><span class="pill hourly">Day rate</span> ${nDaily} &nbsp; <span class="pill monthly">Monthly</span> ${nM}${nInactive?` &nbsp; <span class="note">${nInactive} inactive</span>`:""}</span>
+  </div>
+  <div class="row" style="margin-bottom:14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 14px">
+    <span style="font-size:13px;font-weight:600">Set OT rate for everyone:</span>
+    <span class="mono">${cur}<input class="txt num" type="number" step="0.05" min="0" id="otAllInput" placeholder="0.00">/hr</span>
+    <button class="btn ghost small" data-act="ot-all">Apply to all</button>
+    <span class="note">You can still adjust individuals below afterwards.</span>
+  </div>
+  <div style="overflow-x:auto"><table class="grid">
+  <thead><tr><th>Code</th><th>Name</th><th>Pay scheme</th><th>Day rate</th><th>Monthly salary</th><th>OT rate</th><th></th></tr></thead>
+  <tbody>${rows}</tbody></table></div></div>
+  ${histPanel}
+  <div class="card"><h2>Import rate history</h2>
+  <p class="sub">One-time backfill from an existing spreadsheet — a wide table with Code, Employee Name, then one column per month (rate in effect that month). Matches rows to employees by Code. Doesn't affect current rates, only fills in the History log.</p>
+  <div class="row">
+    <label class="btn ghost" style="display:inline-block">Choose file<input type="file" id="rateHistInput" accept=".xlsx,.xls,.csv" style="display:none"></label>
+  </div></div>`;
+}
+function rateHistoryPanel(code){
+  const e=S.employees[code]||{};
+  const hist=(S.rateHistory[code]||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const rows=hist.map(h=>{
+    const diff=h.to-h.from;
+    const pct=h.from?((diff/h.from)*100).toFixed(1):"—";
+    const diffStr=(diff>=0?"+":"")+money(diff,S.settings.currency);
+    return `<tr><td class="mono">${esc(h.date)}</td><td>${FIELD_LABEL[h.field]||h.field}</td>
+      <td class="mono">${money(h.from,S.settings.currency)} → ${money(h.to,S.settings.currency)}</td>
+      <td class="mono" style="color:${diff>=0?'var(--accent)':'var(--red)'}">${diffStr} (${pct==="—"?"—":pct+"%"})</td>
+      ${h.note?`<td class="note">${esc(h.note)}</td>`:"<td></td>"}
+    </tr>`;
+  }).join("");
+  return `<div class="card"><h2>Rate history — ${esc(e.name||code)}</h2>
+  <p class="sub">Every rate change ever recorded for this employee, oldest first.</p>
+  ${hist.length?`<table class="grid"><thead><tr><th>Date</th><th>Field</th><th>Change</th><th>Difference</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>`
+    :`<p class="note">No rate changes recorded yet for this employee.</p>`}
+  <div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="rate-hist-close">Close</button></div>
+  </div>`;
+}
+
+function segToHHMM(seg){
+  const s=((seg.start%86400)+86400)%86400, e=((seg.end%86400)+86400)%86400;
+  const crossesMidnight=Math.floor(seg.start/86400)!==Math.floor((seg.end-1)/86400);
+  return s2t(s)+"–"+s2t(e)+(crossesMidnight?" (Next Day)":"");
+}
+function dayRowHTML(mk,code,row,editMode){
+  const m=mk.split("-")[1];
+  const{d,dateKey,dow,rec,raw}=row;
+  const hol=isHoliday(dateKey);
+  const cls=(dow===0?"sunday":(dow===6?"wkend":""))+(hol?" pubhol":"")+(rec?"":" abs")+(rec&&rec.odd!=null?" err":"");
+  const dayCell=`${DOW[dow]}${hol?` <span class="note" style="color:#2b6cb0;font-weight:700">PH</span>`:""}`;
+  const dateCell=`<td class="l">${pad(d)}-${m}${rec&&rec.edited?' <span class="edited">✎</span>':""}</td><td class="l">${dayCell}</td>`;
+  if(editMode){
+    const pairs=editablePairsFor(mk,code,dateKey);
+    const brackets=pairs.map((p,idx)=>`<span class="bracket">
+        <input type="time" class="btime" data-act="pair-time" data-code="${esc(code)}" data-date="${dateKey}" data-idx="${idx}" data-side="in" value="${esc(p.in)}">
+        <span class="note">–</span>
+        <input type="time" class="btime" data-act="pair-time" data-code="${esc(code)}" data-date="${dateKey}" data-idx="${idx}" data-side="out" value="${esc(p.out)}">
+        <button class="btn ghost small" data-act="pair-remove" data-code="${esc(code)}" data-date="${dateKey}" data-idx="${idx}" title="Remove">✕</button>
+      </span>`).join(" ");
+    return `<tr class="${cls}">${dateCell}
+      <td class="l" colspan="2">${brackets} <button class="btn ghost small" data-act="pair-add" data-code="${esc(code)}" data-date="${dateKey}">+ Add session</button>
+      ${raw&&raw.edited?`<button class="btn ghost small" data-act="reset-times" data-code="${esc(code)}" data-date="${dateKey}">Reset</button>`:""}</td>
+      <td>${rec?fmtH(rec.reg):""}</td><td>${rec&&rec.earlyOT>0?fmtH(rec.earlyOT):""}</td><td>${rec&&rec.ot>0?fmtH(rec.ot):""}</td></tr>`;
+  }
+  if(!rec)return `<tr class="${cls}">${dateCell}<td class="l">—</td><td></td><td></td><td></td><td></td></tr>`;
+  const sess=rec.segments.map(seg=>segToHHMM(seg)+(seg.fromDate!==dateKey?` <span class="note" style="color:#6a4fa3">(past midnight)</span>`:"")).join(", ")
+    +(rec.odd!=null?`${rec.segments.length?", ":""}<span class="flag">${s2t(rec.odd)}–?</span>`:"");
+  return `<tr class="${cls}">${dateCell}
+    <td class="l">${sess}</td>
+    <td>${fmtH(rec.hours)}</td><td>${fmtH(rec.reg)}</td><td>${rec.earlyOT>0?fmtH(rec.earlyOT):""}</td><td>${rec.ot>0?fmtH(rec.ot):""}</td></tr>`;
+}
+
+function slipHTML(mk,code,editMode){
+  const set=S.settings,cur=set.currency;
+  const data=S.monthData[mk][code];
+  const e=S.employees[code]||{},cat=e.category==="monthly"?"monthly":"daily";
+  const calc=computeMonth(mk,code);
+  const pay=payFor(code,calc);
+  const dayRows=calc.rows.map(r=>dayRowHTML(mk,code,r,editMode)).join("");
+  const flagNote=calc.flags>0?`<p class="note"><span class="flag">▲ ${calc.flags} day(s)</span> have an unpaired clock time (shown as “xx:xx–?”) — that time is not counted. Use Edit times to fix.</p>`:"";
+  const editNote=calc.edits>0?`<p class="note"><span class="edited">✎ ${calc.edits} day(s)</span> manually corrected.</p>`:"";
+  const payRows=pay.lines.map(([l,v])=>`<tr><td>${l}</td><td>${money(v,cur)}</td></tr>`).join("");
+  const bonusRows=pay.items.map((it,idx)=>`<tr><td>
+      <input class="txt sans" style="width:180px;font-size:12px" value="${esc(it.label||"")}" placeholder="e.g. transport allowance" data-act="bonus-label" data-code="${esc(code)}" data-idx="${idx}">
+      <input class="txt num" type="number" step="1" value="${it.amount||0}" data-act="bonus-amount" data-code="${esc(code)}" data-idx="${idx}">
+      <button class="btn ghost small" data-act="bonus-del" data-code="${esc(code)}" data-idx="${idx}" title="Remove">✕</button>
+    </td><td>${money(it.amount||0,cur)}</td></tr>`).join("");
+  const deductRows=pay.deductions.map((it,idx)=>`<tr><td>
+      <input class="txt sans" style="width:180px;font-size:12px" value="${esc(it.label||"")}" placeholder="e.g. CPF (employee share)" data-act="deduct-label" data-code="${esc(code)}" data-idx="${idx}">
+      <input class="txt num" type="number" step="1" value="${it.amount||0}" data-act="deduct-amount" data-code="${esc(code)}" data-idx="${idx}">
+      <button class="btn ghost small" data-act="deduct-del" data-code="${esc(code)}" data-idx="${idx}" title="Remove">✕</button>
+    </td><td>−${money(it.amount||0,cur)}</td></tr>`).join("");
+  const catLabel=cat==="monthly"?"MONTHLY PAID":"DAY RATE";
+  return `<div class="slip" data-slip="${esc(code)}">
+    <div class="slip-head">
+      <div><div class="co">${esc(set.company)}</div><h3>PAY SLIP · ${monthLabel(mk).toUpperCase()}</h3></div>
+      <div style="text-align:right"><span class="pill ${cat==="monthly"?"monthly":"hourly"}">${catLabel}</span><br>
+      <button class="btn ghost small" data-act="toggle-edit" data-code="${esc(code)}" style="margin-top:8px">${editMode?"Done editing":"Edit times"}</button></div>
+    </div>
+    <div class="slip-meta">
+      <div><span>Employee</span><b style="font-family:var(--sans)">${esc(data.name)}</b></div>
+      <div><span>Code</span><b>${esc(code)}</b></div>
+      <div><span>Days present</span><b>${calc.present} / ${calc.dim}</b></div>
+    </div>
+    <table class="days"><thead><tr>
+      <th class="l">Date</th><th class="l">Day</th><th class="l">Sessions (in–out)</th><th>Hours</th><th>Reg</th><th>Early OT</th><th>OT</th>
+    </tr></thead><tbody>${dayRows}</tbody></table>
+    ${flagNote}${editNote}
+    <div class="bottom">
+      <div><table class="tot"><tbody>
+        <tr><td>Regular hours</td><td>${fmtH(calc.totReg)} h</td></tr>
+        <tr><td>Early OT hours</td><td>${fmtH(calc.totEarlyOT)} h</td></tr>
+        <tr><td>Overtime hours</td><td>${fmtH(calc.totOT)} h</td></tr>
+        ${payRows}
+        ${bonusRows}
+        <tr><td colspan="2"><button class="btn ghost small" data-act="bonus-add" data-code="${esc(code)}">+ Add bonus / allowance</button></td></tr>
+        ${deductRows}
+        <tr><td colspan="2"><button class="btn ghost small" data-act="deduct-add" data-code="${esc(code)}">+ Add deduction (e.g. CPF)</button></td></tr>
+        <tr class="net"><td>NET PAY</td><td>${money(pay.net,cur)}</td></tr>
+      </tbody></table></div>
+      <div class="sig-one"><div class="line">Employee's signature</div></div>
+    </div>
+  </div>`;
+}
+
+function rPayslips(){
+  if(!S.months.length)return `<div class="card"><h2>No data yet</h2><p class="sub">Upload an attendance file first.</p></div>`;
+  if(!S.activeMonth)loadMonth(S.months[S.months.length-1]);
+  const mk=S.activeMonth, md=S.monthData[mk]||{};
+  const codes=Object.keys(md).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  if(S.selEmp!=="ALL"&&!codes.includes(S.selEmp))S.selEmp="ALL";
+  const show=S.selEmp==="ALL"?codes:[S.selEmp];
+  const monthOpts=[...S.months].reverse().map(m=>`<option value="${m}" ${m===mk?"selected":""}>${monthLabel(m)}</option>`).join("");
+  const empOpts=`<option value="ALL" ${S.selEmp==="ALL"?"selected":""}>All employees (${codes.length})</option>`+
+    codes.map(c=>`<option value="${esc(c)}" ${c===S.selEmp?"selected":""}>${esc(c)} — ${esc(md[c].name)}</option>`).join("");
+  return `<div class="card">
+    <h2>Payslips &amp; timesheets</h2>
+    <p class="sub">Pick a month and employee, fix any wrong times with “Edit times”, enter bonuses, then preview or print. Each payslip prints on its own page.</p>
+    <div class="row">
+      <select class="txt sans" data-act="pick-month">${monthOpts}</select>
+      <select class="txt sans" data-act="pick-emp" style="min-width:240px">${empOpts}</select>
+      <button class="btn ghost" data-act="preview">Preview ${S.selEmp==="ALL"?"all":""}</button>
+      <button class="btn" data-act="print">Print ${S.selEmp==="ALL"?"all payslips":"payslip"}</button>
+    </div>
+    <p class="note" style="margin-top:8px">Preview opens the same layout in a new tab without saving anything to history. Print does the same but also archives it permanently — that's the point it commits. Enter times as a comma-separated list in edit mode — they pair up automatically (1st–2nd, 3rd–4th…).</p>
+  </div>`+show.map(c=>slipHTML(mk,c,!!S.editCodes[c])).join("");
+}
+
+function snapshotSlipHTML(mk,code,snap){
+  const cur=snap.currency||S.settings.currency;
+  const dayRows=snap.rows.map(r=>dayRowHTML(mk,code,r,false)).join("");
+  const flagNote=snap.flags>0?`<p class="note"><span class="flag">▲ ${snap.flags} day(s)</span> had an unpaired clock time when this payslip was generated.</p>`:"";
+  const payRows=snap.lines.map(([l,v])=>`<tr><td>${l}</td><td>${money(v,cur)}</td></tr>`).join("");
+  const bonusRows=(snap.items||[]).map(it=>`<tr><td>${esc(it.label||"Bonus / allowance")}</td><td>${money(it.amount||0,cur)}</td></tr>`).join("");
+  const deductRows=(snap.deductions||[]).map(it=>`<tr><td>${esc(it.label||"Deduction")}</td><td>−${money(it.amount||0,cur)}</td></tr>`).join("");
+  const catLabel=snap.category==="monthly"?"MONTHLY PAID":"DAY RATE";
+  return `<div class="slip">
+    <div class="slip-head">
+      <div><div class="co">${esc(snap.company||S.settings.company)}</div><h3>PAY SLIP · ${monthLabel(mk).toUpperCase()}</h3></div>
+      <div style="text-align:right"><span class="pill ${snap.category==="monthly"?"monthly":"hourly"}">${catLabel}</span><br>
+      <span class="note" style="display:block;margin-top:8px">Archived ${new Date(snap.generatedAt).toLocaleString()}</span></div>
+    </div>
+    <div class="slip-meta">
+      <div><span>Employee</span><b style="font-family:var(--sans)">${esc(snap.name)}</b></div>
+      <div><span>Code</span><b>${esc(code)}</b></div>
+      <div><span>Days present</span><b>${snap.present} / ${snap.dim}</b></div>
+    </div>
+    <table class="days"><thead><tr>
+      <th class="l">Date</th><th class="l">Day</th><th class="l">Sessions (in–out)</th><th>Hours</th><th>Reg</th><th>Early OT</th><th>OT</th>
+    </tr></thead><tbody>${dayRows}</tbody></table>
+    ${flagNote}
+    <div class="bottom">
+      <div><table class="tot"><tbody>
+        <tr><td>Regular hours</td><td>${fmtH(snap.totReg)} h</td></tr>
+        <tr><td>Early OT hours</td><td>${fmtH(snap.totEarlyOT||0)} h</td></tr>
+        <tr><td>Overtime hours</td><td>${fmtH(snap.totOT)} h</td></tr>
+        ${payRows}
+        ${bonusRows}
+        ${deductRows}
+        <tr class="net"><td>NET PAY</td><td>${money(snap.net,cur)}</td></tr>
+      </tbody></table></div>
+      <div class="sig-one"><div class="line">Employee's signature</div></div>
+    </div>
+  </div>`;
+}
+
+function rHistory(){
+  const codes=Object.keys(S.employees).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  if(!codes.length||!S.months.length)return `<div class="card"><h2>No archived payslips yet</h2><p class="sub">Upload attendance and print at least one payslip — every payslip you print is archived here automatically, permanently, with the rates and hours as they were at that time.</p></div>`;
+  const mode=S.histMode||"employee";
+  const modeBtns=`<span class="seg">
+    <button class="${mode==="employee"?"on-m":""}" data-act="hist-mode" data-m="employee">By employee</button>
+    <button class="${mode==="month"?"on-m":""}" data-act="hist-mode" data-m="month">By month</button>
+  </span>`;
+  let body="";
+  if(mode==="employee"){
+    if(!S.histEmp||!codes.includes(S.histEmp))S.histEmp=codes[0];
+    const code=S.histEmp;
+    const allMonths=[...S.months].sort().reverse();
+    const range=S.histRange||"12";
+    const limited=range==="all"?allMonths:allMonths.slice(0,parseInt(range,10));
+    const entries=limited.map(mk=>({mk,snap:loadPayslipsFor(mk)[code]})).filter(x=>x.snap);
+    const empOpts=codes.map(c=>`<option value="${esc(c)}" ${c===code?"selected":""}>${esc(c)} — ${esc(S.employees[c].name)}</option>`).join("");
+    const rangeBtns=[["3","Last 3 mo"],["6","Last 6 mo"],["12","Last 12 mo"],["all","All"]]
+      .map(([r,label])=>`<button class="btn ${S.histRange===r?"":"ghost"} small" data-act="hist-range" data-r="${r}">${label}</button>`).join(" ");
+    const rows=entries.map(({mk,snap})=>`<tr data-act="hist-view" data-mk="${mk}" data-code="${esc(code)}" style="cursor:pointer">
+      <td class="mono">${monthLabel(mk)}</td>
+      <td>${snap.category==="monthly"?"Monthly":"Day rate"}</td>
+      <td class="mono">${fmtH(snap.totReg)}</td>
+      <td class="mono">${fmtH(snap.totEarlyOT||0)}</td>
+      <td class="mono">${fmtH(snap.totOT)}</td>
+      <td class="mono">${money(snap.net,snap.currency||S.settings.currency)}</td>
+      <td class="note">${new Date(snap.generatedAt).toLocaleDateString()}</td>
+    </tr>`).join("");
+    body=`<div class="row" style="margin-bottom:12px">
+      <select class="txt sans" data-act="hist-emp" style="min-width:220px">${empOpts}</select>
+      ${rangeBtns}
+    </div>
+    ${entries.length?`<table class="grid"><thead><tr><th>Month</th><th>Scheme</th><th>Reg h</th><th>Early OT h</th><th>OT h</th><th>Net pay</th><th>Finalized</th></tr></thead><tbody>${rows}</tbody></table>`
+      :`<p class="note">No archived payslips for this employee in the selected range — print a payslip for them to archive one.</p>`}`;
+  }else{
+    const allMonths=[...S.months].sort().reverse();
+    if(!S.histMonth||!allMonths.includes(S.histMonth))S.histMonth=allMonths[0];
+    const mk=S.histMonth;
+    const store=loadPayslipsFor(mk);
+    const entries=Object.keys(store).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(code=>({code,snap:store[code]}));
+    const monthOpts=allMonths.map(m=>`<option value="${m}" ${m===mk?"selected":""}>${monthLabel(m)}</option>`).join("");
+    const rows=entries.map(({code,snap})=>`<tr data-act="hist-view" data-mk="${mk}" data-code="${esc(code)}" style="cursor:pointer">
+      <td class="mono">${esc(code)}</td>
+      <td>${esc(snap.name)}</td>
+      <td>${snap.category==="monthly"?"Monthly":"Day rate"}</td>
+      <td class="mono">${fmtH(snap.totReg)}</td>
+      <td class="mono">${fmtH(snap.totEarlyOT||0)}</td>
+      <td class="mono">${fmtH(snap.totOT)}</td>
+      <td class="mono">${money(snap.net,snap.currency||S.settings.currency)}</td>
+    </tr>`).join("");
+    const monthTotal=entries.reduce((s,{snap})=>s+snap.net,0);
+    body=`<div class="row" style="margin-bottom:12px">
+      <select class="txt sans" data-act="hist-month" style="min-width:200px">${monthOpts}</select>
+      ${entries.length?`<button class="btn ghost" data-act="hist-print-month" data-mk="${mk}">Print all archived for this month</button>`:""}
+    </div>
+    ${entries.length?`<table class="grid"><thead><tr><th>Code</th><th>Employee</th><th>Scheme</th><th>Reg h</th><th>Early OT h</th><th>OT h</th><th>Net pay</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="note" style="margin-top:10px">Total net pay archived for ${monthLabel(mk)}: <b class="mono">${money(monthTotal,S.settings.currency)}</b></p>`
+      :`<p class="note">No archived payslips for ${monthLabel(mk)} yet — print payslips for that month to archive them.</p>`}`;
+  }
+  const detailSnap=S.histView?loadPayslipsFor(S.histView.mk)[S.histView.code]:null;
+  const detail=detailSnap?snapshotSlipHTML(S.histView.mk,S.histView.code,detailSnap):"";
+  return `<div class="card no-print">
+    <h2>Payslip history</h2>
+    <p class="sub">Every payslip you print is archived permanently with the exact hours, rates and pay used at that time — later rate changes or time edits won't alter what's shown here.</p>
+    <div class="row" style="margin-bottom:14px">${modeBtns}</div>
+    ${body}
+  </div>
+  ${detail?`<div class="row no-print" style="margin-bottom:10px"><button class="btn" data-act="hist-print">Print this archived payslip</button></div>${detail}`:""}`;
+}
+
+function rSettings(){
+  const s=S.settings;
+  const f=(label,k,type,step,hint)=>`<div class="set-field"><label>${label}</label>
+    <input class="txt ${type==="text"?"sans":""}" style="${type==="text"?"width:340px":"width:110px"}" type="${type==="time"?"time":type}" step="${step||""}" value="${esc(s[k])}" data-act="setting" data-k="${k}" data-t="${type}">
+    ${hint?`<div class="note" style="margin-top:3px">${hint}</div>`:""}</div>`;
+  const ep=getEndpoint();
+  const statusLine=CLOUD.status==="off"?`<span class="note">Not connected — data is only saved in this browser.</span>`:
+    CLOUD.status==="syncing"?`<span class="note">Syncing…</span>`:
+    CLOUD.status==="error"?`<span class="note" style="color:var(--red)">Sync error: ${esc(CLOUD.lastError||"")}</span>`:
+    `<span class="note" style="color:var(--accent)">Connected — last synced ${CLOUD.lastSync?CLOUD.lastSync.toLocaleString():"just now"}.</span>`;
+  return `<div class="card" style="max-width:600px"><h2>Settings</h2>
+  <p class="sub">Applied to every calculation. Saved automatically.</p>
+  ${f("Company name (shown on payslips)","company","text")}
+  ${f("Currency symbol","currency","text")}
+  ${f("Day-change hour","dayChangeHour","number","1","The working day starts at this hour. E.g. 6 means a new day begins at 6:00am — a shift from 1am to 8am splits into 1am-6am (previous day) and 6am-8am (this day).")}
+  <div class="row">${f("Normal start — weekday","wkStart","time")}${f("Normal end — weekday","wkEnd","time")}</div>
+  <div class="row">${f("Normal start — Saturday","satStart","time")}${f("Normal end — Saturday","satEnd","time")}</div>
+  <div class="row">${f("Early OT qualifying buffer (min before start)","earlyOTBufferMin","number","5")}${f("OT qualifying buffer (min after end)","lateOTBufferMin","number","5")}</div>
+  <p class="note" style="margin-top:-8px;margin-bottom:14px">A worker must clock in at least the Early-OT buffer before their normal start to earn Early OT, and must still be working at least the OT buffer after their normal end to earn OT — but once qualified, ALL time from the normal start/end boundary counts, not just the buffer portion. Time that doesn't meet either buffer is still paid, just as regular hours, not OT.</p>
+  <div class="row">${f("Minimum hours — weekday","minHoursWeekday","number","0.5")}${f("Minimum hours — Saturday","minHoursSaturday","number","0.5")}</div>
+  <p class="note" style="margin-top:-8px;margin-bottom:14px">Lateness offset: if a worker starts late and their regular hours fall short of this minimum, hours worked in the OT window are first used to make up the shortfall before any OT is paid.</p>
+  ${f("Lunch break deducted (minutes)","lunchMinutes","number","5","Deducted from regular hours on any day where the total exceeds the threshold below.")}
+  ${f("Lunch deduction threshold (hours)","lunchThresholdH","number","0.5")}
+  ${f("OT rounding block (minutes)","otBlockMin","number","5","OT is rounded DOWN in blocks of this size: 29 min → 0, 31 min → 0.5 h. OT pay rates are set per employee on the Employees page.")}
+  </div>
+  <div class="card" style="max-width:600px"><h2>Public holidays</h2>
+  <p class="sub">Shown as a "PH" tag on the day tables in payslips and history. Display only — doesn't change pay calculation.</p>
+  <div class="row" style="margin-bottom:12px">
+    <input class="txt" type="date" id="holDateInput">
+    <input class="txt sans" id="holLabelInput" placeholder="e.g. National Day" style="width:200px">
+    <button class="btn ghost" data-act="hol-add">Add</button>
+  </div>
+  ${S.holidays.length?`<table class="grid"><thead><tr><th>Date</th><th>Name</th><th></th></tr></thead><tbody>
+    ${S.holidays.map((h,idx)=>`<tr><td class="mono">${esc(h.date)}</td><td>${esc(h.label||"")}</td><td><button class="btn ghost small" data-act="hol-del" data-idx="${idx}">Remove</button></td></tr>`).join("")}
+  </tbody></table>`:`<p class="note">No public holidays added yet.</p>`}
+  </div>
+  <div class="card" style="max-width:600px"><h2>Cloud sync</h2>
+  <p class="sub">Connect this page to a shared Google Sheet so you and your partner always see the same data — nothing lives only in one browser. Each device is connected separately using the same web app URL.</p>
+  <div class="set-field"><label>Web app URL</label>
+    <input class="txt sans wide" style="width:100%" id="cloudUrlInput" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(ep)}"></div>
+  <div class="row" style="margin-bottom:10px">
+    <button class="btn" data-act="cloud-connect">${ep?"Save & sync":"Connect"}</button>
+    ${ep?`<button class="btn ghost" data-act="cloud-sync">Sync now</button><button class="btn ghost" data-act="cloud-push-all">Upload everything from this device</button><button class="btn ghost" data-act="cloud-disconnect">Disconnect</button>`:""}
+  </div>
+  ${statusLine}
+  </div>
+  <div class="card" style="max-width:600px"><h2>Backup &amp; manual sharing</h2>
+  <p class="sub">An alternative to Cloud sync — export everything as a file to back up or hand to your partner manually. Importing replaces everything currently in the app with that file's contents.</p>
+  <div class="row">
+    <button class="btn ghost" data-act="export">Export data (.json)</button>
+    <label class="btn ghost" style="display:inline-block">Import data<input type="file" id="dataInput" accept=".json" style="display:none"></label>
+  </div></div>
+  <div class="card" style="max-width:600px"><h2>Manage imported months</h2>
+  <p class="sub">To open or print a month, use the Payslips tab. This is only for removing a month's attendance data entirely.</p>
+  ${S.months.length?`<table class="grid"><thead><tr><th>Month</th><th>Employees</th><th></th></tr></thead><tbody>
+    ${[...S.months].reverse().map(mk=>{
+      loadMonth(mk);
+      const n=S.monthData[mk]?Object.keys(S.monthData[mk]).length:0;
+      return `<tr><td class="mono">${monthLabel(mk)}</td><td class="mono">${n}</td><td><button class="btn ghost small" data-act="delmonth" data-mk="${mk}">Delete</button></td></tr>`;
+    }).join("")}
+  </tbody></table>`:`<p class="note">No months imported yet.</p>`}
+  </div>`;
+}
+
+/* ---------- printable page ---------- */
+const PRINT_CSS=`
+  body{font-family:'Segoe UI',Arial,sans-serif;color:#16232f;margin:0;background:#fff}
+  .slip{padding:10mm 8mm;page-break-after:always;max-width:195mm;margin:0 auto}
+  .slip:last-child{page-break-after:auto}
+  .slip-head{display:flex;justify-content:space-between;border-bottom:3px solid #16232f;padding-bottom:10px;margin-bottom:12px}
+  .slip-head h3{margin:0;font-size:17px;letter-spacing:.04em}
+  .co{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#4a5a68}
+  .pill{align-self:flex-start;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
+  .pill.monthly{background:#e2f0ed;color:#0e6d5f}.pill.hourly{background:#fdf1dc;color:#b0700a}
+  .slip-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;font-size:12px}
+  .slip-meta span{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#4a5a68}
+  .slip-meta b{font-family:Consolas,monospace}
+  .sansb{font-family:'Segoe UI',Arial,sans-serif!important;font-weight:700}
+  table.days{width:100%;border-collapse:collapse;font-size:10px;font-family:Consolas,monospace}
+  table.days th{font-family:'Segoe UI',Arial,sans-serif;font-size:9px;letter-spacing:.05em;text-transform:uppercase;text-align:right;padding:3px 6px;border-bottom:1.5px solid #16232f;color:#4a5a68}
+  table.days th.l,table.days td.l{text-align:left}
+  table.days td{padding:2px 6px;border-bottom:1px solid #eceff1;text-align:right;white-space:nowrap}
+  tr.wkend td{background:#f2f4f5}tr.sunday td{background:#efeaf8}tr.abs td{color:#aab6bf}
+  tr.err td{background:#fbe9e7}tr.pubhol td{background:#e3f0fb}
+  .flag{color:#b3372f;font-weight:700}.edited{color:#6a4fa3;font-weight:700}
+  .note{font-size:10px;color:#4a5a68;font-family:'Segoe UI',Arial,sans-serif}
+  .bottom{margin-top:10px;border-top:2px solid #16232f;padding-top:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+  .bottom table.tot{font-size:11.5px;border-collapse:collapse}
+  .bottom table.tot td{padding:3px 20px 3px 0}
+  .bottom table.tot td:last-child{font-family:Consolas,monospace;text-align:right;min-width:105px}
+  .bottom tr.net td{border-top:2px solid #16232f;font-weight:700;font-size:13.5px;padding-top:7px}
+  .sig-one{width:200px;flex-shrink:0;text-align:center;font-size:10px;color:#4a5a68;font-family:'Segoe UI',Arial,sans-serif}
+  .sig-one .line{border-top:1px solid #16232f;margin-top:60px;padding-top:5px}
+  @media print{.slip{max-width:100%}}`;
+function openPrintPage(title,slipsHTML,downloadName,autoPrint){
+  const printScript=autoPrint===false?"":`<script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>`;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${PRINT_CSS}</style></head><body>${slipsHTML}${printScript}</body></html>`;
+  const blob=new Blob([html],{type:"text/html"});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,"_blank");
+  if(!w){const a=document.createElement("a");a.href=url;a.download=downloadName;a.click();}
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+/* archive the exact hours/rates/pay for each employee at the moment of printing —
+   later rate or attendance changes will not alter this permanent record */
+function finalizeSnapshots(mk,codes){
+  const store=loadPayslipsFor(mk);
+  const set=S.settings;
+  for(const code of codes){
+    const data=S.monthData[mk] &&S.monthData[mk][code]; if(!data)continue;
+    const e=S.employees[code]||{};
+    const calc=computeMonth(mk,code);
+    const pay=payFor(code,calc);
+    store[code]={
+      name:data.name, category:e.category==="monthly"?"monthly":"daily",
+      company:set.company, currency:set.currency,
+      generatedAt:new Date().toISOString(),
+      rates:{dayRate:+e.dayRate||0,monthlySalary:+e.monthlySalary||0,otRate:+e.otRate||0},
+      rows:calc.rows, totReg:calc.totReg, totEarlyOT:calc.totEarlyOT, totOT:calc.totOT, present:calc.present, dim:calc.dim,
+      fullDays:calc.fullDays, flags:calc.flags,
+      lines:pay.lines, items:pay.items, deductions:pay.deductions, net:pay.net
+    };
+  }
+  sSet("payslips-"+mk,store);
+}
+function buildLiveSlipsHTML(mk,codes,watermark){
+  const md=S.monthData[mk]||{}, set=S.settings, cur=set.currency, m=mk.split("-")[1];
+  const banner=watermark?`<p class="note" style="font-size:12px;font-weight:700;color:var(--amber);text-align:center;border:1px dashed #d8a23b;padding:6px;margin-bottom:10px">PREVIEW ONLY — not saved to payslip history. Use "Print all payslips" to archive.</p>`:"";
+  return codes.map(code=>{
+    const data=md[code],e=S.employees[code]||{},cat=e.category==="monthly"?"monthly":"daily";
+    const calc=computeMonth(mk,code),pay=payFor(code,calc);
+    const rows=calc.rows.map(({d,dateKey,dow,rec})=>{
+      const hol=isHoliday(dateKey);
+      const cls=(dow===0?"sunday":(dow===6?"wkend":""))+(hol?" pubhol":"")+(rec?"":" abs")+(rec&&rec.odd!=null?" err":"");
+      const dayCell=`${DOW[dow]}${hol?` <span class="note" style="color:#2b6cb0;font-weight:700">PH</span>`:""}`;
+      if(!rec)return `<tr class="${cls}"><td class="l">${pad(d)}-${m}</td><td class="l">${dayCell}</td><td class="l">—</td><td></td><td></td><td></td><td></td></tr>`;
+      const sess=rec.segments.map(seg=>segToHHMM(seg)+(seg.fromDate!==dateKey?' <span class="note" style="color:#6a4fa3">(past midnight)</span>':"")).join(", ")+(rec.odd!=null?`${rec.segments.length?", ":""}<span class="flag">${s2t(rec.odd)}–?</span>`:"");
+      return `<tr class="${cls}"><td class="l">${pad(d)}-${m}${rec.edited?' <span class="edited">✎</span>':""}</td><td class="l">${dayCell}</td><td class="l">${sess}</td><td>${fmtH(rec.hours)}</td><td>${fmtH(rec.reg)}</td><td>${rec.earlyOT>0?fmtH(rec.earlyOT):""}</td><td>${rec.ot>0?fmtH(rec.ot):""}</td></tr>`;
+    }).join("");
+    const payRows=pay.lines.map(([l,v])=>`<tr><td>${l}</td><td>${money(v,cur)}</td></tr>`).join("");
+    const bonusRows=pay.items.map(it=>`<tr><td>${esc(it.label||"Bonus / allowance")}</td><td>${money(it.amount||0,cur)}</td></tr>`).join("");
+    const deductRows=pay.deductions.map(it=>`<tr><td>${esc(it.label||"Deduction")}</td><td>−${money(it.amount||0,cur)}</td></tr>`).join("");
+    const catLabel=cat==="monthly"?"MONTHLY PAID":"DAY RATE";
+    return `<div class="slip">
+      ${banner}
+      <div class="slip-head"><div><div class="co">${esc(set.company)}</div><h3>PAY SLIP · ${monthLabel(mk).toUpperCase()}</h3></div>
+      <div class="pill ${cat==="monthly"?"monthly":"hourly"}">${catLabel}</div></div>
+      <div class="slip-meta">
+        <div><span>Employee</span><b class="sansb">${esc(data.name)}</b></div>
+        <div><span>Code</span><b>${esc(code)}</b></div>
+        <div><span>Days present</span><b>${calc.present} / ${calc.dim}</b></div>
+      </div>
+      <table class="days"><thead><tr><th class="l">Date</th><th class="l">Day</th><th class="l">Sessions (in–out)</th><th>Hours</th><th>Reg</th><th>Early OT</th><th>OT</th></tr></thead><tbody>${rows}</tbody></table>
+      ${calc.flags?`<p class="note"><span class="flag">▲ ${calc.flags} day(s)</span> with unpaired clock time — not counted.</p>`:""}
+      <div class="bottom">
+        <div><table class="tot"><tbody>
+          <tr><td>Regular hours</td><td>${fmtH(calc.totReg)} h</td></tr>
+          <tr><td>Early OT hours</td><td>${fmtH(calc.totEarlyOT)} h</td></tr>
+          <tr><td>Overtime hours</td><td>${fmtH(calc.totOT)} h</td></tr>
+          ${payRows}
+          ${bonusRows}
+          ${deductRows}
+          <tr class="net"><td>NET PAY</td><td>${money(pay.net,cur)}</td></tr>
+        </tbody></table></div>
+        <div class="sig-one"><div class="line">Employee's signature</div></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+function printSlips(){
+  const mk=S.activeMonth, md=S.monthData[mk]||{};
+  const codes=S.selEmp==="ALL"?Object.keys(md).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})):[S.selEmp];
+  finalizeSnapshots(mk,codes);
+  openPrintPage("Payslips "+monthLabel(mk),buildLiveSlipsHTML(mk,codes,false),"payslips-"+mk+".html",true);
+}
+function previewSlips(){
+  const mk=S.activeMonth, md=S.monthData[mk]||{};
+  const codes=S.selEmp==="ALL"?Object.keys(md).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})):[S.selEmp];
+  if(!codes.length){toast("No employees to preview for this month.");return;}
+  openPrintPage("Preview — "+monthLabel(mk),buildLiveSlipsHTML(mk,codes,true),"preview-"+mk+".html",false);
+}
+/* reprint an already-archived payslip exactly as it was when finalized */
+function snapshotPrintBlock(mk,code,snap){
+  const cur=snap.currency||S.settings.currency, m=mk.split("-")[1];
+  const rows=snap.rows.map(({d,dateKey,dow,rec})=>{
+    const hol=isHoliday(dateKey);
+    const cls=(dow===0?"sunday":(dow===6?"wkend":""))+(hol?" pubhol":"")+(rec?"":" abs")+(rec&&rec.odd!=null?" err":"");
+    const dayCell=`${DOW[dow]}${hol?` <span class="note" style="color:#2b6cb0;font-weight:700">PH</span>`:""}`;
+    if(!rec)return `<tr class="${cls}"><td class="l">${pad(d)}-${m}</td><td class="l">${dayCell}</td><td class="l">—</td><td></td><td></td><td></td><td></td></tr>`;
+    const sess=rec.segments.map(seg=>segToHHMM(seg)+(seg.fromDate!==dateKey?' <span class="note" style="color:#6a4fa3">(past midnight)</span>':"")).join(", ")+(rec.odd!=null?`${rec.segments.length?", ":""}<span class="flag">${s2t(rec.odd)}–?</span>`:"");
+    return `<tr class="${cls}"><td class="l">${pad(d)}-${m}${rec.edited?' <span class="edited">✎</span>':""}</td><td class="l">${dayCell}</td><td class="l">${sess}</td><td>${fmtH(rec.hours)}</td><td>${fmtH(rec.reg)}</td><td>${rec.earlyOT>0?fmtH(rec.earlyOT):""}</td><td>${rec.ot>0?fmtH(rec.ot):""}</td></tr>`;
+  }).join("");
+  const payRows=snap.lines.map(([l,v])=>`<tr><td>${l}</td><td>${money(v,cur)}</td></tr>`).join("");
+  const bonusRows=(snap.items||[]).map(it=>`<tr><td>${esc(it.label||"Bonus / allowance")}</td><td>${money(it.amount||0,cur)}</td></tr>`).join("");
+  const deductRows=(snap.deductions||[]).map(it=>`<tr><td>${esc(it.label||"Deduction")}</td><td>−${money(it.amount||0,cur)}</td></tr>`).join("");
+  const catLabel=snap.category==="monthly"?"MONTHLY PAID":"DAY RATE";
+  return `<div class="slip">
+    <div class="slip-head"><div><div class="co">${esc(snap.company||S.settings.company)}</div><h3>PAY SLIP · ${monthLabel(mk).toUpperCase()}</h3></div>
+    <div class="pill ${snap.category==="monthly"?"monthly":"hourly"}">${catLabel}</div></div>
+    <div class="slip-meta">
+      <div><span>Employee</span><b class="sansb">${esc(snap.name)}</b></div>
+      <div><span>Code</span><b>${esc(code)}</b></div>
+      <div><span>Days present</span><b>${snap.present} / ${snap.dim}</b></div>
+    </div>
+    <table class="days"><thead><tr><th class="l">Date</th><th class="l">Day</th><th class="l">Sessions (in–out)</th><th>Hours</th><th>Reg</th><th>Early OT</th><th>OT</th></tr></thead><tbody>${rows}</tbody></table>
+    ${snap.flags?`<p class="note"><span class="flag">▲ ${snap.flags} day(s)</span> with unpaired clock time — not counted.</p>`:""}
+    <p class="note">Archived copy — finalized ${new Date(snap.generatedAt).toLocaleString()}.</p>
+    <div class="bottom">
+      <div><table class="tot"><tbody>
+        <tr><td>Regular hours</td><td>${fmtH(snap.totReg)} h</td></tr>
+        <tr><td>Early OT hours</td><td>${fmtH(snap.totEarlyOT||0)} h</td></tr>
+        <tr><td>Overtime hours</td><td>${fmtH(snap.totOT)} h</td></tr>
+        ${payRows}
+        ${bonusRows}
+        ${deductRows}
+        <tr class="net"><td>NET PAY</td><td>${money(snap.net,cur)}</td></tr>
+      </tbody></table></div>
+      <div class="sig-one"><div class="line">Employee's signature</div></div>
+    </div>
+  </div>`;
+}
+function printSnapshot(mk,code){
+  const snap=loadPayslipsFor(mk)[code]; if(!snap){toast("No archived payslip found for this month.");return;}
+  openPrintPage("Payslip "+monthLabel(mk)+" "+code,snapshotPrintBlock(mk,code,snap),"payslip-"+mk+"-"+code+".html");
+}
+function printSnapshotsForMonth(mk){
+  const store=loadPayslipsFor(mk);
+  const codes=Object.keys(store).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  if(!codes.length){toast("No archived payslips for this month.");return;}
+  const html=codes.map(code=>snapshotPrintBlock(mk,code,store[code])).join("");
+  openPrintPage("Archived payslips "+monthLabel(mk),html,"payslips-archived-"+mk+".html");
+}
+
+/* ---------- events ---------- */
+function pairAdd(mk,code,dateKey){
+  const pairs=editablePairsFor(mk,code,dateKey);
+  pairs.push({in:"",out:""});
+  savePairedOverride(mk,code,dateKey,pairs);
+}
+function pairRemove(mk,code,dateKey,idx){
+  const pairs=editablePairsFor(mk,code,dateKey);
+  pairs.splice(idx,1);
+  savePairedOverride(mk,code,dateKey,pairs);
+}
+function pairSetTime(mk,code,dateKey,idx,side,value){
+  const pairs=editablePairsFor(mk,code,dateKey);
+  while(pairs.length<=idx)pairs.push({in:"",out:""});
+  pairs[idx][side]=value;
+  savePairedOverride(mk,code,dateKey,pairs);
+}
+function bind(){
+  /* per-render bindings only (elements recreated each render) */
+  const drop=$("#drop");
+  if(drop){
+    drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("on");});
+    drop.addEventListener("dragleave",()=>drop.classList.remove("on"));
+    drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("on");importFile(e.dataTransfer.files[0]);});
+    $("#fileInput").addEventListener("change",e=>{importFile(e.target.files[0]);e.target.value="";});
+  }
+  const dataInput=$("#dataInput");
+  if(dataInput)dataInput.addEventListener("change",e=>{importData(e.target.files[0]);e.target.value="";});
+  const rateHistInput=$("#rateHistInput");
+  if(rateHistInput)rateHistInput.addEventListener("change",e=>{importRateHistoryFile(e.target.files[0]);e.target.value="";});
+  const search=$("#empSearch");
+  if(search)search.addEventListener("input",e=>{S._q=e.target.value;
+    clearTimeout(search._h);search._h=setTimeout(()=>{const p=search.selectionStart;render();const s2=$("#empSearch");if(s2){s2.focus();s2.setSelectionRange(p,p);}},300);});
+}
+/* one-time delegation — attached ONCE so buttons never double-fire */
+/* Keeps a specific payslip card visually anchored in the viewport across a
+   re-render — without this, toggling edit mode or adding a bonus/deduction
+   row changes the page's total height and the browser just keeps the same
+   scrollY, which visibly "throws" the content the user was looking at. */
+function reRenderAnchored(code,mutate){
+  const before=document.querySelector(`[data-slip="${CSS.escape(code)}"]`);
+  const top=before?before.getBoundingClientRect().top:null;
+  mutate();
+  render();
+  if(top!=null){
+    requestAnimationFrame(()=>{
+      const after=document.querySelector(`[data-slip="${CSS.escape(code)}"]`);
+      if(after)window.scrollBy(0,after.getBoundingClientRect().top-top);
+    });
+  }
+}
+function bindStatic(){
+  $("#view").addEventListener("click",e=>{
+    const b=e.target.closest("[data-act]"); if(!b)return;
+    const act=b.dataset.act;
+    if(act==="export")exportData();
+    else if(act==="delmonth"){
+      if(!confirm("Delete "+monthLabel(b.dataset.mk)+" attendance data, bonuses and edits? Employee rates are kept."))return;
+      const mk=b.dataset.mk;
+      S.months=S.months.filter(m=>m!==mk);sSet("months",S.months);
+      delete S.monthData[mk];delete S.bonuses[mk];delete S.overrides[mk];
+      if(LS_OK){localStorage.removeItem("tc-month-"+mk);localStorage.removeItem("tc-bonus-"+mk);localStorage.removeItem("tc-ov-"+mk);}
+      if(S.activeMonth===mk)S.activeMonth=S.months[S.months.length-1]||null;
+      if(S.activeMonth)loadMonth(S.activeMonth);
+      render();
+    }
+    else if(act==="cat"){S.employees[b.dataset.code].category=b.dataset.v;sSet("employees",S.employees);render();}
+    else if(act==="toggle-active"){
+      const e=S.employees[b.dataset.code];
+      e.status=e.status==="inactive"?"active":"inactive";
+      sSet("employees",S.employees);
+      render();
+    }
+    else if(act==="rate-hist"){S.rateHistEmp=b.dataset.code;render();}
+    else if(act==="rate-hist-close"){S.rateHistEmp=null;render();}
+    else if(act==="toggle-edit"){
+      const code=b.dataset.code;
+      reRenderAnchored(code,()=>{S.editCodes[code]=!S.editCodes[code];});
+    }
+    else if(act==="reset-times"){
+      const mk=S.activeMonth;
+      if(S.overrides[mk]&&S.overrides[mk][b.dataset.code]){delete S.overrides[mk][b.dataset.code][b.dataset.date];sSet("ov-"+mk,S.overrides[mk]);}
+      render();
+    }
+    else if(act==="print")printSlips();
+    else if(act==="preview")previewSlips();
+    else if(act==="bonus-add"){
+      reRenderAnchored(b.dataset.code,()=>{
+        const items=bonusItems(S.activeMonth,b.dataset.code);
+        items.push({label:"",amount:0});
+        setBonusItems(S.activeMonth,b.dataset.code,items);
+      });
+    }
+    else if(act==="bonus-del"){
+      reRenderAnchored(b.dataset.code,()=>{
+        const items=bonusItems(S.activeMonth,b.dataset.code);
+        items.splice(+b.dataset.idx,1);
+        setBonusItems(S.activeMonth,b.dataset.code,items);
+      });
+    }
+    else if(act==="deduct-add"){
+      reRenderAnchored(b.dataset.code,()=>{
+        const items=deductionItems(S.activeMonth,b.dataset.code);
+        items.push({label:"",amount:0});
+        setDeductionItems(S.activeMonth,b.dataset.code,items);
+      });
+    }
+    else if(act==="deduct-del"){
+      reRenderAnchored(b.dataset.code,()=>{
+        const items=deductionItems(S.activeMonth,b.dataset.code);
+        items.splice(+b.dataset.idx,1);
+        setDeductionItems(S.activeMonth,b.dataset.code,items);
+      });
+    }
+    else if(act==="ot-all"){
+      const v=parseFloat(($("#otAllInput")||{}).value)||0;
+      for(const c of Object.keys(S.employees))S.employees[c].otRate=v;
+      sSet("employees",S.employees);
+      toast("OT rate "+money(v,S.settings.currency)+"/hr applied to all employees.");
+      render();
+    }
+    else if(act==="cloud-connect"){
+      const v=($("#cloudUrlInput")||{}).value.trim();
+      if(!v){toast("Paste the web app URL first.");return;}
+      setEndpoint(v);
+      pullFromCloud(true).then(()=>pushAllToCloud(false));
+      render();
+    }
+    else if(act==="cloud-sync")pullFromCloud(true);
+    else if(act==="cloud-push-all")pushAllToCloud(true);
+    else if(act==="cloud-disconnect"){
+      if(!confirm("Disconnect from the shared Google Sheet? Data already saved in this browser is kept."))return;
+      setEndpoint(""); CLOUD.status="off"; CLOUD.lastSync=null; render();
+    }
+    else if(act==="hol-add"){
+      const dEl=$("#holDateInput"),lEl=$("#holLabelInput");
+      const date=dEl?dEl.value:"";
+      if(!date){toast("Pick a date first.");return;}
+      S.holidays.push({date,label:lEl?lEl.value.trim():""});
+      saveHolidays();
+      render();
+    }
+    else if(act==="hol-del"){
+      S.holidays.splice(+b.dataset.idx,1);
+      saveHolidays();
+      render();
+    }
+    else if(act==="hist-range"){S.histRange=b.dataset.r;S.histView=null;render();}
+    else if(act==="hist-view"){S.histView={mk:b.dataset.mk,code:b.dataset.code};render();}
+    else if(act==="hist-print"){if(S.histView)printSnapshot(S.histView.mk,S.histView.code);}
+    else if(act==="hist-mode"){S.histMode=b.dataset.m;S.histView=null;render();}
+    else if(act==="hist-print-month")printSnapshotsForMonth(b.dataset.mk);
+    else if(act==="pair-add"){
+      reRenderAnchored(b.dataset.code,()=>{pairAdd(S.activeMonth,b.dataset.code,b.dataset.date);});
+    }
+    else if(act==="pair-remove"){
+      reRenderAnchored(b.dataset.code,()=>{pairRemove(S.activeMonth,b.dataset.code,b.dataset.date,+b.dataset.idx);});
+    }
+  });
+  $("#view").addEventListener("change",e=>{
+    const b=e.target.closest("[data-act]"); if(!b)return;
+    const act=b.dataset.act;
+    if(act==="pair-time"){
+      reRenderAnchored(b.dataset.code,()=>{
+        pairSetTime(S.activeMonth,b.dataset.code,b.dataset.date,+b.dataset.idx,b.dataset.side,b.value);
+      });
+      return;
+    }
+    if(act==="rate"){
+      const code=b.dataset.code, f=b.dataset.f, newVal=parseFloat(b.value)||0;
+      const oldVal=+S.employees[code][f]||0;
+      S.employees[code][f]=newVal;
+      sSet("employees",S.employees);
+      logRateChange(code,f,oldVal,newVal);
+    }
+    else if(act==="pick-month"){loadMonth(b.value);render();}
+    else if(act==="pick-emp"){S.selEmp=b.value;render();}
+    else if(act==="hist-emp"){S.histEmp=b.value;S.histView=null;render();}
+    else if(act==="hist-month"){S.histMonth=b.value;S.histView=null;render();}
+    else if(act==="bonus-label"||act==="bonus-amount"){
+      const items=bonusItems(S.activeMonth,b.dataset.code);
+      const it=items[+b.dataset.idx]; if(!it)return;
+      if(act==="bonus-label")it.label=b.value; else it.amount=parseFloat(b.value)||0;
+      setBonusItems(S.activeMonth,b.dataset.code,items);
+      render();
+    }
+    else if(act==="deduct-label"||act==="deduct-amount"){
+      const items=deductionItems(S.activeMonth,b.dataset.code);
+      const it=items[+b.dataset.idx]; if(!it)return;
+      if(act==="deduct-label")it.label=b.value; else it.amount=parseFloat(b.value)||0;
+      setDeductionItems(S.activeMonth,b.dataset.code,items);
+      render();
+    }
+    else if(act==="setting"){
+      const k=b.dataset.k;
+      S.settings[k]=b.dataset.t==="number"?(parseFloat(b.value)||0):b.value;
+      sSet("settings",S.settings);
+    }
+  });
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{S.tab=b.dataset.tab;render();}));
+bindStatic();
+render();
+renderSyncBadge();
+if(getEndpoint())pullFromCloud(false);
+/* Keep two devices from drifting apart while both stay open: quietly re-check
+   the shared Sheet every 2 minutes. Skipped if the user is mid-edit in a field,
+   so a background sync never yanks focus away or resets an in-progress edit —
+   it just waits for the next cycle. */
+let syncPollHandle=null;
+function startSyncPolling(){
+  if(syncPollHandle)clearInterval(syncPollHandle);
+  syncPollHandle=setInterval(()=>{
+    if(!getEndpoint())return;
+    const el=document.activeElement;
+    const busy=el&&["INPUT","TEXTAREA","SELECT"].includes(el.tagName);
+    if(busy)return;
+    if(pendingPushes>0)return;                    // a save is still in flight — don't risk overwriting it
+    if(Date.now()-lastPushSettledAt<10000)return;  // give a just-finished save a moment to fully land
+    pullFromCloud(false);
+  },120000);
+}
+startSyncPolling();
+</script>
+</body>
+</html>
