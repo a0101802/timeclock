@@ -1567,7 +1567,9 @@ function bindStatic(){
       const v=($("#cloudUrlInput")||{}).value.trim();
       if(!v){toast("Paste the web app URL first.");return;}
       setEndpoint(v);
+      CLOUD.status="on"; CLOUD.lastError=null;
       toast("Connected. Use \"Save to cloud\" whenever you want to back up, or \"Restore from backup\" to pull it down.");
+      renderSyncBadge();
       render();
     }
     else if(act==="cloud-save")saveToCloud(true);
@@ -1577,7 +1579,7 @@ function bindStatic(){
     }
     else if(act==="cloud-disconnect"){
       if(!confirm("Disconnect from the cloud backup? Data already saved in this browser is kept."))return;
-      setEndpoint(""); CLOUD.status="off"; CLOUD.lastSync=null; render();
+      setEndpoint(""); CLOUD.status="off"; CLOUD.lastSync=null; renderSyncBadge(); render();
     }
     else if(act==="hol-add"){
       const dEl=$("#holDateInput"),lEl=$("#holLabelInput");
