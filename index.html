@@ -101,7 +101,8 @@ input.btime{border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-
     <button class="tab" data-tab="history">4 · History</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
-  <span class="syncbadge off" id="syncBadge">☁ Not connected</span>
+  <span class="note" id="cloudStatusText" style="color:#c7d2dc"></span>
+  <button class="btn" id="cloudSaveBtn" style="padding:7px 16px" disabled>Save</button>
 </div>
 <div class="banner" id="banner">⚠ Browser storage is unavailable here — changes will be lost when you close this page. Use “Export data” to save your work, and open this file directly in Chrome/Edge for permanent saving.</div>
 <div class="toast" id="toast"></div>
@@ -187,14 +188,32 @@ const dirtyKeys=new Set(); // keys changed locally since the last successful "Sa
 function getEndpoint(){try{return localStorage.getItem("tc-cloud-endpoint")||"";}catch(e){return "";}}
 function setEndpoint(u){try{if(u)localStorage.setItem("tc-cloud-endpoint",u);else localStorage.removeItem("tc-cloud-endpoint");}catch(e){}}
 function renderSyncBadge(){
-  const b=$("#syncBadge"); if(!b)return;
-  const t=CLOUD.status==="off"?"☁ Not connected":
-    CLOUD.status==="saving"?"☁ Saving…":
-    CLOUD.status==="error"?"☁ Save failed":
-    dirtyKeys.size?"☁ "+dirtyKeys.size+" unsaved":
-    "☁ Saved"+(CLOUD.lastSync?" "+CLOUD.lastSync.toTimeString().slice(0,5):"");
-  b.textContent=t;
-  b.className="syncbadge "+(CLOUD.status==="on"&&dirtyKeys.size?"unsaved":CLOUD.status);
+  const txt=$("#cloudStatusText"), btn=$("#cloudSaveBtn");
+  if(!txt||!btn)return;
+  if(CLOUD.status==="off"){
+    txt.textContent="Cloud backup not connected";
+    btn.disabled=true; btn.textContent="Save"; btn.className="btn ghost";
+    btn.style.opacity=".5";
+  }else if(CLOUD.status==="saving"){
+    txt.textContent="Saving…";
+    btn.disabled=true; btn.textContent="Saving…"; btn.className="btn ghost";
+    btn.style.opacity=".7";
+  }else if(CLOUD.status==="error"){
+    txt.textContent="Save failed — click Save to retry";
+    txt.style.color="#f3a9a3";
+    btn.disabled=false; btn.textContent="Save"; btn.className="btn"; btn.style.background="var(--red)";
+    btn.style.opacity="1";
+  }else if(dirtyKeys.size>0){
+    txt.textContent=dirtyKeys.size+" change"+(dirtyKeys.size===1?"":"s")+" not saved to cloud";
+    txt.style.color="#f3d9a3";
+    btn.disabled=false; btn.textContent="Save"; btn.className="btn"; btn.style.background="var(--amber)";
+    btn.style.opacity="1";
+  }else{
+    txt.textContent="All changes saved"+(CLOUD.lastSync?" · "+CLOUD.lastSync.toTimeString().slice(0,5):"");
+    txt.style.color="#9fb0be";
+    btn.disabled=true; btn.textContent="Save"; btn.className="btn ghost";
+    btn.style.opacity=".5"; btn.style.background="";
+  }
 }
 function isTyping(){
   const el=document.activeElement;
@@ -891,10 +910,6 @@ function rUpload(){
   <p class="note">To open, print, or manage a month you've already uploaded, use the <b>Payslips</b> tab (pick the month there) or the <b>History</b> tab. Backup and cloud sync are under <b>Settings</b>.</p>`;
 }
 
-function cloudSaveButtonHTML(){
-  if(!getEndpoint())return"";
-  return `<button class="btn ghost small" data-act="cloud-save">☁ Save to cloud${dirtyKeys.size?" ("+dirtyKeys.size+")":""}</button>`;
-}
 function rEmployees(){
   const cur=S.settings.currency;
   const codes=Object.keys(S.employees).sort((a,b)=>{
@@ -938,7 +953,6 @@ function rEmployees(){
   <div class="row" style="margin-bottom:14px">
     <input class="txt sans" style="width:260px" placeholder="Search code or name…" id="empSearch" value="${esc(S._q||"")}">
     <span class="note"><span class="pill hourly">Day rate</span> ${nDaily} &nbsp; <span class="pill monthly">Monthly</span> ${nM}${nInactive?` &nbsp; <span class="note">${nInactive} inactive</span>`:""}</span>
-    ${cloudSaveButtonHTML()}
   </div>
   <div class="row" style="margin-bottom:14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 14px">
     <span style="font-size:13px;font-weight:600">Set OT rate for everyone:</span>
@@ -1081,7 +1095,6 @@ function rPayslips(){
       <select class="txt sans" data-act="pick-emp" style="min-width:240px">${empOpts}</select>
       <button class="btn ghost" data-act="preview">Preview ${S.selEmp==="ALL"?"all":""}</button>
       <button class="btn" data-act="print">Print ${S.selEmp==="ALL"?"all payslips":"payslip"}</button>
-      ${cloudSaveButtonHTML()}
     </div>
     <p class="note" style="margin-top:8px">Preview opens the same layout in a new tab without saving anything to history. Print does the same but also archives it permanently — that's the point it commits. Enter times as a comma-separated list in edit mode — they pair up automatically (1st–2nd, 3rd–4th…).</p>
   </div>`+show.map(c=>slipHTML(mk,c,!!S.editCodes[c])).join("");
@@ -1633,6 +1646,7 @@ function bindStatic(){
   });
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{S.tab=b.dataset.tab;render();}));
+$("#cloudSaveBtn").addEventListener("click",()=>saveToCloud(true));
 bindStatic();
 render();
 renderSyncBadge();
